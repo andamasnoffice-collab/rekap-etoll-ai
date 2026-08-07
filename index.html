@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" class="dark h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RekapToll - Rekapitulasi e-Toll OCR & Anti Duplikat (Cloud Synced)</title>
+    <title>RekapToll - Rekapitulasi e-Toll OCR & Analytics (Cloud Synced)</title>
 
+    <!-- Tailwind CSS with custom theme extensions -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -13,29 +14,46 @@
                 extend: {
                     colors: {
                         brand: {
-                            50: '#f0f7ff',
-                            100: '#e0effe',
-                            500: '#2563eb',
-                            600: '#1d4ed8',
-                            700: '#1e40af',
-                            800: '#1e3a8a',
-                            900: '#172554',
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            800: '#3730a3',
+                            900: '#312e81',
+                            950: '#1e1b4b',
+                        },
+                        darkbg: {
+                            base: '#0b0f19',
+                            card: '#131b2e',
+                            border: '#1e293b',
+                            hover: '#1a243a'
                         }
                     },
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif'],
                         mono: ['JetBrains Mono', 'monospace']
+                    },
+                    boxShadow: {
+                        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                        'glow-brand': '0 0 25px rgba(99, 102, 241, 0.25)',
+                        'glow-emerald': '0 0 25px rgba(16, 185, 129, 0.25)',
+                        'glow-purple': '0 0 25px rgba(168, 85, 247, 0.25)',
                     }
                 }
             }
         }
     </script>
 
-    <!-- Google Fonts & CDN Icons -->
+    <!-- Google Fonts, FontAwesome, Chart.js & SheetJS (Excel Export) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS CDN for Native Excel (.xlsx) export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <!-- React & Babel Standalone -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -43,22 +61,55 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: #080c14;
+            color: #f1f5f9;
+        }
+
+        .glass-card-dark {
+            background: rgba(19, 27, 46, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card-dark:hover {
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
         .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 8px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(99, 102, 241, 0.4); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(99, 102, 241, 0.7); }
+
+        /* Typography safeguards to prevent text overlaps */
+        .text-wrap-safe {
+            word-break: break-word;
+            overflow-wrap: anywhere;
+            hyphens: auto;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 0.5; transform: scale(1); }
+            50% { opacity: 0.9; transform: scale(1.03); }
+        }
+
+        .pulse-glow {
+            animation: pulseGlow 3.5s infinite ease-in-out;
+        }
+
         @media print {
             .no-print { display: none !important; }
             body { background: white !important; color: black !important; }
+            .print-container { width: 100% !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; }
         }
     </style>
 </head>
-<body class="text-slate-800 dark:text-slate-100 dark:bg-slate-900 transition-colors duration-200">
+<body class="min-h-full antialiased selection:bg-brand-500 selection:text-white">
     <div id="root"></div>
 
     <script type="text/babel">
-
-        // Helper Functions
         function formatRupiah(number) {
             return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number || 0);
         }
@@ -84,7 +135,6 @@
                 if (n < 12) return angka[n];
                 if (n < 20) return terbilang(n - 10) + " Belas";
                 if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh " + terbilang(n % 10);
-                if (n < 1000) return "Seratus " + terbilang(n - 100);
                 if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus " + terbilang(n % 100);
                 if (n < 2000) return "Seribu " + terbilang(n - 1000);
                 if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu " + terbilang(n % 1000);
@@ -94,9 +144,8 @@
             return terbilang(num).replace(/\s+/g, ' ').trim() + " Rupiah";
         }
 
-        // Gemini OCR Call
         async function callGeminiOCR(base64DataUrl, userApiKey) {
-            let mimeType = "image/png";
+            let mimeType = "image/jpeg";
             let base64Data = base64DataUrl;
             const match = base64DataUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
             if (match) {
@@ -104,9 +153,14 @@
                 base64Data = match[2];
             }
 
-            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice e-Toll Indonesia.";
-            const userPrompt = "Ekstrak: etollNumber (16 digit), merchant, amount, invoiceNumber, date (YYYY-MM-DD).";
+            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice/struk e-Toll Indonesia (e-Money, BCA Flazz, Brizzi, Tapcash, Livin, Tokopedia, Indomaret, dll). Ekstrak data secara tepat.";
+            const userPrompt = "Analisis foto struk ini. Ekstrak:\n1. etollNumber: 16-digit nomor kartu e-Toll\n2. merchant: Tempat/Aplikasi pembelian\n3. amount: Total nominal (angka)\n4. invoiceNumber: Nomor resi / invoice / referensi\n5. date: Tanggal transaksi (YYYY-MM-DD)";
+            
             const apiKey = userApiKey || "";
+            if (!apiKey) {
+                throw new Error("API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda.");
+            }
+
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
 
             const payload = {
@@ -129,14 +183,208 @@
             };
 
             const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) throw new Error("Gagal OCR.");
+            if (!response.ok) {
+                const errJson = await response.json().catch(() => ({}));
+                throw new Error(errJson.error?.message || "Gagal memproses OCR via Gemini API.");
+            }
             const result = await response.json();
             return JSON.parse(result.candidates[0].content.parts[0].text);
         }
 
+        function SpendingTrendChart({ transactions, selectedMonth }) {
+            const chartRef = React.useRef(null);
+            const chartInstance = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!chartRef.current) return;
+                
+                const filtered = transactions.filter(t => selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth)));
+                
+                const dateMap = {};
+                filtered.forEach(t => {
+                    const d = t.date || 'Lainnya';
+                    dateMap[d] = (dateMap[d] || 0) + Number(t.amount || 0);
+                });
+
+                const sortedDates = Object.keys(dateMap).sort();
+                const labels = sortedDates.length > 0 ? sortedDates.map(d => formatDateIndo(d)) : ['Belum Ada Data'];
+                const values = sortedDates.length > 0 ? sortedDates.map(d => dateMap[d]) : [0];
+
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                    chartInstance.current = null;
+                }
+
+                const ctx = chartRef.current.getContext('2d');
+                const gradient = ctx.createLinearGradient(0, 0, 0, 250);
+                gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+                gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Pengeluaran e-Toll (Rp)',
+                            data: values,
+                            borderColor: '#6366f1',
+                            borderWidth: 3,
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.35,
+                            pointBackgroundColor: '#818cf8',
+                            pointBorderColor: '#1e1b4b',
+                            pointRadius: 4,
+                            pointHoverRadius: 7
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#0f172a',
+                                titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
+                                bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
+                                padding: 12,
+                                cornerRadius: 10,
+                                callbacks: {
+                                    label: function(context) {
+                                        return ' Nominal: ' + formatRupiah(context.parsed.y);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 10 } }
+                            },
+                            y: {
+                                grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                                ticks: { 
+                                    color: '#94a3b8', 
+                                    font: { family: 'Plus Jakarta Sans', size: 10 },
+                                    callback: function(value) {
+                                        if (value >= 1000000) return (value/1000000).toFixed(1) + 'Jt';
+                                        if (value >= 1000) return (value/1000).toFixed(0) + 'Rb';
+                                        return value;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                        chartInstance.current = null;
+                    }
+                };
+            }, [transactions, selectedMonth]);
+
+            return (
+                <div className="h-64 w-full relative">
+                    <canvas ref={chartRef}></canvas>
+                </div>
+            );
+        }
+
+        function CardDistributionChart({ cards, transactions, selectedMonth }) {
+            const chartRef = React.useRef(null);
+            const chartInstance = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!chartRef.current) return;
+
+                const filtered = transactions.filter(t => selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth)));
+                
+                const cardTotals = {};
+                cards.forEach(c => {
+                    cardTotals[c.label] = 0;
+                });
+
+                filtered.forEach(t => {
+                    const matchedCard = cards.find(c => c.number === t.etollNumber);
+                    const label = matchedCard ? matchedCard.label : (t.etollNumber || 'Lainnya');
+                    cardTotals[label] = (cardTotals[label] || 0) + Number(t.amount || 0);
+                });
+
+                const labels = Object.keys(cardTotals);
+                const values = Object.values(cardTotals);
+                const hasData = values.some(v => v > 0);
+
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                    chartInstance.current = null;
+                }
+
+                const ctx = chartRef.current.getContext('2d');
+
+                chartInstance.current = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: hasData ? labels : ['Belum Ada Transaksi'],
+                        datasets: [{
+                            data: hasData ? values : [1],
+                            backgroundColor: hasData ? [
+                                '#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6'
+                            ] : ['#334155'],
+                            borderWidth: 2,
+                            borderColor: '#0f172a'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '70%',
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    color: '#cbd5e1',
+                                    font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' },
+                                    padding: 15,
+                                    usePointStyle: true
+                                }
+                            },
+                            tooltip: {
+                                backgroundColor: '#0f172a',
+                                titleFont: { family: 'Plus Jakarta Sans', size: 12, weight: 'bold' },
+                                bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
+                                padding: 12,
+                                cornerRadius: 10,
+                                callbacks: {
+                                    label: function(context) {
+                                        if (!hasData) return ' Tidak ada data';
+                                        return ' Total: ' + formatRupiah(context.parsed);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+
+                return () => {
+                    if (chartInstance.current) {
+                        chartInstance.current.destroy();
+                        chartInstance.current = null;
+                    }
+                };
+            }, [cards, transactions, selectedMonth]);
+
+            return (
+                <div className="h-64 w-full relative flex items-center justify-center">
+                    <canvas ref={chartRef}></canvas>
+                </div>
+            );
+        }
+
         const INITIAL_CARDS = [
-            { id: 'card-1', label: 'Mandiri e-Money Utama', number: '6032 9812 3456 7890', bank: 'Mandiri', color: 'from-blue-600 to-indigo-700' },
-            { id: 'card-2', label: 'BCA Flazz Operasional', number: '6013 1234 5678 9012', bank: 'BCA', color: 'from-sky-500 to-blue-600' }
+            { id: 'card-1', label: 'Mandiri e-Money Utama', number: '6032 9812 3456 7890', bank: 'Mandiri', color: 'from-blue-600 via-indigo-600 to-slate-900' },
+            { id: 'card-2', label: 'BCA Flazz Operasional', number: '6013 1234 5678 9012', bank: 'BCA', color: 'from-cyan-500 via-blue-600 to-indigo-900' }
         ];
 
         const currentYearMonth = new Date().toISOString().substring(0, 7);
@@ -144,7 +392,11 @@
         function App() {
             const [cards, setCards] = React.useState(() => JSON.parse(localStorage.getItem('etoll_cards')) || INITIAL_CARDS);
             const [transactions, setTransactions] = React.useState(() => JSON.parse(localStorage.getItem('etoll_transactions')) || []);
-            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => localStorage.getItem('etoll_fb_pid') || '');
+            const [monthlyDeposits, setMonthlyDeposits] = React.useState(() => JSON.parse(localStorage.getItem('etoll_monthly_deposits')) || {
+                [currentYearMonth]: 1500000
+            });
+            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
+            const [tempFbPid, setTempFbPid] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => localStorage.getItem('etoll_gemini_key') || '');
 
             const [spjProfile, setSpjProfile] = React.useState(() => JSON.parse(localStorage.getItem('etoll_spj_profile')) || {
@@ -162,59 +414,100 @@
 
             const [showScanModal, setShowScanModal] = React.useState(false);
             const [showNfcModal, setShowNfcModal] = React.useState(false);
+            const [showDepositModal, setShowDepositModal] = React.useState(false);
             const [showSpjPrintModal, setShowSpjPrintModal] = React.useState(false);
-            const [previewReceiptImg, setPreviewReceiptImg] = React.useState(null);
-            const [editingTransaction, setEditingTransaction] = React.useState(null);
             const [deletingTx, setDeletingTx] = React.useState(null);
             const [toast, setToast] = React.useState(null);
 
-            // Fetch Firebase Firestore real-time updates
-            const fetchCloudData = React.useCallback(async () => {
-                if (!firebaseProjectId) return;
+            const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: '' });
+            const [isSyncing, setIsSyncing] = React.useState(false);
+
+            const fetchCloudData = React.useCallback(async (pidOverride = null) => {
+                const targetPid = (pidOverride !== null ? pidOverride : firebaseProjectId).trim();
+                if (!targetPid) {
+                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif (Project ID Kosong)' });
+                    return;
+                }
+                
+                setIsSyncing(true);
+                const primaryUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/etoll_transactions.json`;
+                const fallbackUrl = `https://${targetPid}.firebaseio.com/etoll_transactions.json`;
+
                 try {
-                    const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/etoll_transactions`;
-                    const res = await fetch(url);
-                    if (!res.ok) return;
+                    let res = await fetch(primaryUrl);
+                    if (!res.ok) {
+                        res = await fetch(fallbackUrl);
+                    }
+                    if (!res.ok) {
+                        throw new Error(`Realtime DB Error ${res.status}. Pastikan Rules database terbuka.`);
+                    }
                     const data = await res.json();
-                    if (data.documents) {
-                        const cloudTxs = data.documents.map(d => {
-                            const f = d.fields;
-                            return {
-                                id: d.name.split('/').pop(),
-                                etollNumber: f.etollNumber?.stringValue || '',
-                                merchant: f.merchant?.stringValue || '',
-                                amount: Number(f.amount?.integerValue || f.amount?.doubleValue || 0),
-                                invoiceNumber: f.invoiceNumber?.stringValue || '',
-                                date: f.date?.stringValue || '',
-                                receiptImg: f.receiptImg?.stringValue || null,
-                                createdAt: f.createdAt?.stringValue || new Date().toISOString(),
-                                source: f.source?.stringValue || 'Cloud'
-                            };
+                    if (data && typeof data === 'object') {
+                        const cloudTxs = Object.keys(data).map(key => ({
+                            id: key,
+                            ...data[key]
+                        }));
+
+                        setTransactions(prev => {
+                            const map = new Map();
+                            cloudTxs.forEach(t => map.set(t.invoiceNumber || t.id, t));
+                            prev.forEach(t => {
+                                if (t.invoiceNumber && !map.has(t.invoiceNumber)) {
+                                    map.set(t.invoiceNumber, t);
+                                } else if (!t.invoiceNumber && !map.has(t.id)) {
+                                    map.set(t.id, t);
+                                }
+                            });
+                            return Array.from(map.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
                         });
-                        setTransactions(cloudTxs);
+
+                        setSyncStatus({ state: 'success', msg: `Terhubung Realtime DB (${cloudTxs.length} data di Cloud)` });
+                    } else {
+                        setSyncStatus({ state: 'success', msg: 'Terhubung ke Firebase (Belum ada transaksi)' });
                     }
                 } catch (e) {
-                    console.warn("Cloud Syncing Error:", e);
+                    console.warn("Cloud Sync Error:", e);
+                    setSyncStatus({ state: 'error', msg: e.message || "Gagal terhubung ke Firebase" });
+                } finally {
+                    setIsSyncing(false);
                 }
             }, [firebaseProjectId]);
 
-            // Auto poll cloud data every 10 seconds if Firebase is configured
             React.useEffect(() => {
-                fetchCloudData();
-                const interval = setInterval(fetchCloudData, 10000);
-                return () => clearInterval(interval);
-            }, [fetchCloudData]);
+                if (firebaseProjectId) {
+                    fetchCloudData();
+                    const interval = setInterval(() => fetchCloudData(), 12000);
+                    return () => clearInterval(interval);
+                }
+            }, [firebaseProjectId, fetchCloudData]);
 
-            // Sync LocalStorage
             React.useEffect(() => { localStorage.setItem('etoll_cards', JSON.stringify(cards)); }, [cards]);
             React.useEffect(() => { localStorage.setItem('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
+            React.useEffect(() => { localStorage.setItem('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
             React.useEffect(() => { localStorage.setItem('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
             React.useEffect(() => { localStorage.setItem('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
+            React.useEffect(() => { localStorage.setItem('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
 
             const showToastNotification = (msg, type = 'success') => {
                 setToast({ msg, type });
                 setTimeout(() => setToast(null), 4000);
             };
+
+            const handleSaveDeposit = (monthKey, amount) => {
+                setMonthlyDeposits(prev => ({
+                    ...prev,
+                    [monthKey]: Number(amount || 0)
+                }));
+                setShowDepositModal(false);
+                showToastNotification(`Deposit Uang Muka untuk periode ${monthKey} diperbarui.`);
+            };
+
+            const currentDeposit = React.useMemo(() => {
+                if (selectedMonth === 'ALL') {
+                    return Object.values(monthlyDeposits).reduce((a, b) => a + Number(b || 0), 0);
+                }
+                return Number(monthlyDeposits[selectedMonth] || 0);
+            }, [monthlyDeposits, selectedMonth]);
 
             const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
                 if (!invoiceNum || !invoiceNum.trim()) return false;
@@ -227,15 +520,23 @@
                 const existing = cards.find(c => c.number.replace(/\s+/g, '') === formattedNum.replace(/\s+/g, ''));
                 if (existing) return existing;
 
+                const colorPalettes = [
+                    'from-indigo-600 via-purple-600 to-slate-900',
+                    'from-emerald-600 via-teal-700 to-slate-900',
+                    'from-amber-500 via-orange-600 to-slate-900',
+                    'from-rose-600 via-pink-600 to-slate-900'
+                ];
+                const randomColor = colorPalettes[cards.length % colorPalettes.length];
+
                 const newCard = {
                     id: 'card-' + Date.now(),
                     label: newCardData.label || 'e-Toll Card ' + (cards.length + 1),
                     number: formattedNum,
-                    bank: newCardData.bank || 'Mandiri',
-                    color: 'from-indigo-600 to-purple-700'
+                    bank: newCardData.bank || 'e-Toll',
+                    color: randomColor
                 };
                 setCards(prev => [...prev, newCard]);
-                showToastNotification(`Kartu e-Toll baru (${formattedNum}) berhasil ditambahkan.`);
+                showToastNotification(`Kartu baru (${formattedNum}) berhasil ditambahkan.`);
                 return newCard;
             };
 
@@ -245,186 +546,1386 @@
                     handleAddCard({ label: 'Auto ' + (txData.merchant || 'Card'), number: cardNum, bank: 'e-Toll' });
                 }
 
+                const updatedTx = { 
+                    id: txData.id || ('tx-' + Date.now()),
+                    etollNumber: cardNum,
+                    merchant: txData.merchant,
+                    amount: Number(txData.amount || 0),
+                    invoiceNumber: txData.invoiceNumber,
+                    date: txData.date,
+                    createdAt: txData.createdAt || new Date().toISOString()
+                };
+
                 if (txData.id) {
-                    setTransactions(prev => prev.map(t => t.id === txData.id ? { ...txData, etollNumber: cardNum } : t));
+                    setTransactions(prev => prev.map(t => t.id === updatedTx.id ? updatedTx : t));
                 } else {
-                    const newTx = { ...txData, id: 'tx-' + Date.now(), etollNumber: cardNum, createdAt: new Date().toISOString() };
-                    setTransactions(prev => [newTx, ...prev]);
-                    
-                    if (newTx.date) setSelectedMonth(newTx.date.substring(0, 7));
+                    setTransactions(prev => [updatedTx, ...prev]);
+                    if (updatedTx.date) setSelectedMonth(updatedTx.date.substring(0, 7));
                     setSelectedCardFilter('ALL');
 
-                    // If Cloud is enabled, push directly
                     if (firebaseProjectId) {
                         try {
-                            const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/etoll_transactions`;
-                            await fetch(url, {
+                            const targetPid = firebaseProjectId.trim();
+                            const primaryUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/etoll_transactions.json`;
+                            const fallbackUrl = `https://${targetPid}.firebaseio.com/etoll_transactions.json`;
+
+                            let res = await fetch(primaryUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({
-                                    fields: {
-                                        etollNumber: { stringValue: newTx.etollNumber },
-                                        merchant: { stringValue: newTx.merchant },
-                                        amount: { integerValue: newTx.amount },
-                                        invoiceNumber: { stringValue: newTx.invoiceNumber },
-                                        date: { stringValue: newTx.date },
-                                        receiptImg: { stringValue: newTx.receiptImg || '' },
-                                        createdAt: { stringValue: newTx.createdAt }
-                                    }
-                                })
+                                body: JSON.stringify(updatedTx)
                             });
-                        } catch (e) { console.error("Cloud Save Error:", e); }
+                            if (!res.ok) {
+                                await fetch(fallbackUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(updatedTx)
+                                });
+                            }
+                            fetchCloudData();
+                        } catch (e) { console.error("Cloud Push Error:", e); }
                     }
                 }
                 setShowScanModal(false);
-                setEditingTransaction(null);
                 showToastNotification('Transaksi berhasil dicatat!');
             };
 
-            const handleDeleteTransaction = (id) => {
+            const handleDeleteTransaction = async (id) => {
                 setTransactions(prev => prev.filter(t => t.id !== id));
                 setDeletingTx(null);
-                showToastNotification('Transaksi dihapus. Nomor invoice kini dapat di-scan/digunakan kembali.', 'info');
+                showToastNotification('Transaksi dihapus. Nomor invoice kini terbebas dan dapat di-scan kembali.', 'info');
             };
 
+            const handleExportExcel = () => {
+                if (!window.XLSX) {
+                    showToastNotification("Library SheetJS (Excel) belum siap, coba muat ulang halaman.", "error");
+                    return;
+                }
+
+                const totalAmount = filteredTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+                const sisaBalance = currentDeposit - totalAmount;
+                
+                // Construct Data Array for SheetJS Worksheet
+                const wsData = [
+                    [(spjProfile.companyName || 'PT NUSANTARA TRANS').toUpperCase()],
+                    ['SURAT PERTANGGUNGJAWABAN (SPJ) BIAYA OPERASIONAL E-TOLL'],
+                    [''],
+                    ['Periode SPJ:', selectedMonth === 'ALL' ? 'Semua Bulan' : selectedMonth, '', 'Tanggal Cetak:', new Date().toLocaleDateString('id-ID')],
+                    ['Nama Pemohon:', spjProfile.applicantName || '-', '', 'Nopol Kendaraan:', spjProfile.vehicleNopol || '-'],
+                    ['Divisi / Dept:', spjProfile.division || '-', '', 'Atasan / Supervisor:', spjProfile.supervisorName || '-'],
+                    [''],
+                    ['No', 'Tanggal Transaksi', 'Merchant / Gate Tol', 'Nomor e-Toll', 'No. Invoice (Unik)', 'Nominal (Rp)']
+                ];
+
+                filteredTransactions.forEach((t, index) => {
+                    wsData.push([
+                        index + 1,
+                        t.date ? formatDateIndo(t.date) : '-',
+                        t.merchant || '-',
+                        t.etollNumber || '-',
+                        t.invoiceNumber || '-',
+                        Number(t.amount || 0)
+                    ]);
+                });
+
+                // Summary & Deposit Balance Rows
+                wsData.push(['']);
+                wsData.push(['', '', '', '', 'TOTAL REALISASI PENGELUARAN:', totalAmount]);
+                wsData.push(['', '', '', '', 'DEPOSIT UANG MUKA DITERIMA:', currentDeposit]);
+                wsData.push(['', '', '', '', sisaBalance >= 0 ? 'SISA UANG MUKA (PENGEMBALIAN):' : 'KEKURANGAN BAYAR (REIMBURSE):', Math.abs(sisaBalance)]);
+                wsData.push(['Terbilang Realisasi:', terbilangRupiah(totalAmount)]);
+                wsData.push(['']);
+                wsData.push(['']);
+
+                // Signatures Block
+                wsData.push(['', 'Pemohon,', '', 'Pemeriksa Keuangan,', '', 'Mengetahui / Atasan,']);
+                wsData.push(['']);
+                wsData.push(['']);
+                wsData.push(['', spjProfile.applicantName || '( ..................... )', '', '( ..................... )', '', spjProfile.supervisorName || '( ..................... )']);
+
+                // Create Worksheet & Workbook
+                const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+                // Define Column Auto-Widths
+                ws['!cols'] = [
+                    { wch: 6 },   // No
+                    { wch: 18 },  // Tanggal
+                    { wch: 32 },  // Merchant
+                    { wch: 24 },  // e-Toll Card Number
+                    { wch: 22 },  // Invoice Number
+                    { wch: 22 }   // Nominal
+                ];
+
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "SPJ e-Toll");
+
+                const cleanApplicant = (spjProfile.applicantName || 'Rekap').replace(/[^a-zA-Z0-9]/g, '_');
+                const fileName = `SPJ_eToll_${cleanApplicant}_${selectedMonth}.xlsx`;
+                
+                XLSX.writeFile(wb, fileName);
+                showToastNotification("File Excel SPJ (.xlsx) berhasil diunduh!");
+            };
+
+            const handleExportCsv = () => {
+                const headers = ["No", "Tanggal", "Merchant", "Nomor e-Toll", "No Invoice", "Nominal (Rp)"];
+                const rows = filteredTransactions.map((t, index) => [
+                    index + 1,
+                    t.date,
+                    `"${(t.merchant || '').replace(/"/g, '""')}"`,
+                    `"${t.etollNumber}"`,
+                    `"${t.invoiceNumber}"`,
+                    t.amount
+                ]);
+                
+                const csvContent = "data:text/csv;charset=utf-8," 
+                    + [headers.join(","), ...rows.map(e => e.join(","))].join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `Rekap_SPJ_eToll_${selectedMonth}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToastNotification("File CSV SPJ berhasil diunduh!");
+            };
+
+            const handleSaveCloudSettings = async () => {
+                const cleanPid = tempFbPid.trim();
+                setFirebaseProjectId(cleanPid);
+                localStorage.setItem('etoll_fb_pid', cleanPid);
+                localStorage.setItem('etoll_gemini_key', geminiApiKey);
+                
+                showToastNotification("Menguji koneksi ke Realtime DB...");
+                await fetchCloudData(cleanPid);
+            };
+
+            const availableMonths = React.useMemo(() => {
+                const setM = new Set();
+                setM.add(currentYearMonth);
+                transactions.forEach(t => {
+                    if (t.date && t.date.length >= 7) {
+                        setM.add(t.date.substring(0, 7));
+                    }
+                });
+                return Array.from(setM).sort().reverse();
+            }, [transactions]);
+
+            const filteredTransactions = React.useMemo(() => {
+                return transactions.filter(t => {
+                    const matchesMonth = selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth));
+                    const matchesCard = selectedCardFilter === 'ALL' || t.etollNumber === selectedCardFilter;
+                    const matchesSearch = !searchQuery || 
+                        (t.merchant && t.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                        (t.invoiceNumber && t.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                        (t.etollNumber && t.etollNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+                    return matchesMonth && matchesCard && matchesSearch;
+                });
+            }, [transactions, selectedMonth, selectedCardFilter, searchQuery]);
+
+            const topMerchants = React.useMemo(() => {
+                const map = {};
+                filteredTransactions.forEach(t => {
+                    const m = t.merchant || 'Lainnya';
+                    map[m] = (map[m] || 0) + Number(t.amount || 0);
+                });
+                const total = Object.values(map).reduce((a, b) => a + b, 0) || 1;
+                return Object.keys(map)
+                    .map(m => ({ name: m, amount: map[m], percent: Math.round((map[m] / total) * 100) }))
+                    .sort((a, b) => b.amount - a.amount)
+                    .slice(0, 4);
+            }, [filteredTransactions]);
+
             return (
-                <div className="min-h-screen flex flex-col">
-                    <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm">
-                        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
-                                    <i className="fa-solid fa-[#1e3a8a] fa-road text-lg"></i>
+                <div className="min-h-screen flex flex-col bg-[#080c14] text-slate-100">
+                    {/* Header */}
+                    <header className="sticky top-0 z-40 bg-[#0b0f19]/90 backdrop-blur-xl border-b border-slate-800 shadow-xl">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between py-3">
+                            <div className="flex items-center gap-3.5 min-w-0">
+                                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/25 shrink-0">
+                                    <i className="fa-solid fa-road-bridge text-2xl"></i>
                                 </div>
-                                <div>
-                                    <h1 className="font-black text-xl bg-gradient-to-r from-brand-600 to-indigo-600 bg-clip-text text-transparent">
-                                        RekapToll <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">24/7 Cloud Sync</span>
-                                    </h1>
+                                <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <h1 className="font-extrabold text-xl sm:text-2xl tracking-tight bg-gradient-to-r from-brand-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent truncate">
+                                            RekapToll
+                                        </h1>
+                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                            Cloud Synced
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-400 font-medium truncate hidden sm:block leading-tight mt-0.5">
+                                        OCR Struk e-Toll, Analytics & Integrasi Bot Telegram 24 Jam
+                                    </p>
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setShowNfcModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2">
-                                    <i className="fa-solid fa-nfc-symbol text-sm animate-pulse"></i>
-                                    <span>NFC Reader</span>
+                            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                                <button 
+                                    onClick={() => setShowNfcModal(true)} 
+                                    className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm flex items-center gap-2 transition-all duration-200 active:scale-95"
+                                >
+                                    <i className="fa-solid fa-nfc-symbol text-base animate-pulse"></i>
+                                    <span className="hidden sm:inline">NFC Reader</span>
                                 </button>
-                                <button onClick={() => { setEditingTransaction(null); setShowScanModal(true); }} className="bg-brand-600 hover:bg-brand-700 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2">
-                                    <i className="fa-solid fa-camera text-xs"></i>
+                                <button 
+                                    onClick={() => setShowScanModal(true)} 
+                                    className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-semibold px-3.5 sm:px-4 py-2.5 rounded-2xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-brand-500/30 transition-all duration-200 active:scale-95"
+                                >
+                                    <i className="fa-solid fa-camera text-sm"></i>
                                     <span>Scan Struk</span>
                                 </button>
                             </div>
                         </div>
 
-                        <div className="max-w-7xl mx-auto px-4 flex space-x-2 border-t border-slate-100 dark:border-slate-700/50 overflow-x-auto">
-                            <button onClick={() => setActiveTab('dashboard')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'dashboard' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
-                                <i className="fa-solid fa-chart-pie"></i> Dasbor
+                        {/* Navigation Tabs */}
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 flex space-x-1 border-t border-slate-800/80 overflow-x-auto custom-scrollbar">
+                            <button 
+                                onClick={() => setActiveTab('dashboard')} 
+                                className={`py-3.5 px-4 text-xs font-extrabold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap leading-none ${activeTab === 'dashboard' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+                            >
+                                <i className="fa-solid fa-chart-pie text-sm"></i> Dasbor Analytics
                             </button>
-                            <button onClick={() => setActiveTab('transactions')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'transactions' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
-                                <i className="fa-solid fa-receipt"></i> Transaksi ({transactions.length})
+                            <button 
+                                onClick={() => setActiveTab('transactions')} 
+                                className={`py-3.5 px-4 text-xs font-extrabold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap leading-none ${activeTab === 'transactions' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+                            >
+                                <i className="fa-solid fa-receipt text-sm"></i> Daftar Transaksi 
+                                <span className="ml-1 px-2 py-0.5 text-[10px] rounded-full bg-slate-800 text-slate-300 font-bold border border-slate-700">{transactions.length}</span>
                             </button>
-                            <button onClick={() => setActiveTab('cloud_config')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'cloud_config' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
-                                <i className="fa-solid fa-cloud text-sky-500"></i> Integrasi Bot 24 Jam
+                            <button 
+                                onClick={() => setActiveTab('monthly_recap')} 
+                                className={`py-3.5 px-4 text-xs font-extrabold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap leading-none ${activeTab === 'monthly_recap' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+                            >
+                                <i className="fa-solid fa-file-invoice-dollar text-sm"></i> Rekap SPJ Bulanan
+                            </button>
+                            <button 
+                                onClick={() => setActiveTab('cloud_config')} 
+                                className={`py-3.5 px-4 text-xs font-extrabold transition-all border-b-2 flex items-center gap-2 whitespace-nowrap leading-none ${activeTab === 'cloud_config' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}
+                            >
+                                <i className="fa-solid fa-robot text-sky-400 text-sm"></i> Bot Telegram & Cloud DB
                             </button>
                         </div>
                     </header>
 
+                    {/* Toast Notification Container */}
                     {toast && (
-                        <div className="fixed bottom-5 right-5 z-50">
-                            <div className="px-4 py-3 rounded-2xl bg-slate-900 text-white flex items-center gap-3 text-xs font-medium shadow-2xl">
-                                <i className="fa-solid fa-circle-check text-emerald-400"></i>
+                        <div className="fixed bottom-6 right-6 z-50 animate-bounce">
+                            <div className="px-5 py-3.5 rounded-2xl bg-slate-900/95 text-white backdrop-blur-xl flex items-center gap-3 text-xs font-bold shadow-2xl border border-slate-700">
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-xmark text-rose-400' : 'fa-circle-check text-emerald-400'} text-base`}></i>
                                 <span>{toast.msg}</span>
                             </div>
                         </div>
                     )}
 
-                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8 space-y-8">
+                        {/* TAB 1: DASHBOARD ANALYTICS */}
                         {activeTab === 'dashboard' && (
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                        <p className="text-xs font-bold text-slate-400 uppercase">Total e-Toll Bulan Ini</p>
-                                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                                            {formatRupiah(transactions.filter(t => t.date && t.date.startsWith(selectedMonth)).reduce((s,t) => s + Number(t.amount||0), 0))}
+                            <div className="space-y-8">
+                                {/* STATS OVERVIEW CARDS WITH DEPOSIT UANG MUKA */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass relative overflow-hidden group transition-all duration-300 border border-brand-500/20">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider leading-none">Uang Muka / Deposit</p>
+                                            <button 
+                                                onClick={() => setShowDepositModal(true)}
+                                                className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-300 hover:bg-brand-500/30 flex items-center justify-center text-xs transition border border-brand-500/30"
+                                                title="Atur Uang Muka"
+                                            >
+                                                <i className="fa-solid fa-pen-to-square"></i>
+                                            </button>
+                                        </div>
+                                        <h3 className="text-2xl font-black text-white mt-3 tracking-tight text-wrap-safe leading-tight">
+                                            {formatRupiah(currentDeposit)}
                                         </h3>
+                                        <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-800/80">
+                                            <span>Periode {selectedMonth === 'ALL' ? 'Semua' : selectedMonth}</span>
+                                            <button onClick={() => setShowDepositModal(true)} className="text-brand-400 hover:underline font-bold">
+                                                Edit Deposit
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                        <p className="text-xs font-bold text-slate-400 uppercase">Jumlah Transaksi</p>
-                                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
-                                            {transactions.filter(t => t.date && t.date.startsWith(selectedMonth)).length} Transaksi
+
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass relative overflow-hidden group transition-all duration-300">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider leading-none">Total Pengeluaran</p>
+                                            <div className="w-9 h-9 rounded-xl bg-indigo-500/15 text-indigo-400 flex items-center justify-center text-sm border border-indigo-500/20">
+                                                <i className="fa-solid fa-receipt"></i>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-2xl font-black text-white mt-3 tracking-tight text-wrap-safe leading-tight">
+                                            {formatRupiah(filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0))}
                                         </h3>
+                                        <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-800/80">
+                                            <span>Transaksi Valid</span>
+                                            <span className="font-bold text-slate-300">{filteredTransactions.length} Struk</span>
+                                        </div>
                                     </div>
-                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                                        <p className="text-xs font-bold text-slate-400 uppercase">Status Sync Cloud 24/7</p>
-                                        <h3 className="text-sm font-bold text-emerald-500 mt-2 flex items-center gap-1">
-                                            <i className="fa-solid fa-signal animate-pulse"></i> {firebaseProjectId ? 'Terhubung (Firebase Live)' : 'Lokal Mode'}
+
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass relative overflow-hidden group transition-all duration-300">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider leading-none">Sisa Uang Muka</p>
+                                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-sm border ${
+                                                (currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0
+                                                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/20'
+                                                    : 'bg-rose-500/15 text-rose-400 border-rose-500/20'
+                                            }`}>
+                                                <i className={`fa-solid ${(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 ? 'fa-wallet' : 'fa-triangle-exclamation'}`}></i>
+                                            </div>
+                                        </div>
+                                        <h3 className={`text-2xl font-black mt-3 tracking-tight text-wrap-safe leading-tight ${
+                                            (currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+                                        }`}>
+                                            {formatRupiah(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0))}
                                         </h3>
+                                        <div className="mt-4 flex items-center justify-between text-[11px] text-slate-400 font-medium pt-2 border-t border-slate-800/80">
+                                            <span>Status Saldo</span>
+                                            <span className={`font-bold px-2 py-0.5 rounded ${
+                                                (currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 
+                                                    ? 'bg-emerald-500/10 text-emerald-300' 
+                                                    : 'bg-rose-500/10 text-rose-300'
+                                            }`}>
+                                                {(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 ? 'Surplus Deposit' : 'Defisit / Reimburse'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass relative overflow-hidden group transition-all duration-300">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs font-extrabold text-slate-400 uppercase tracking-wider leading-none">Status Cloud Realtime</p>
+                                            <div className="w-9 h-9 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-sm border border-emerald-500/20">
+                                                <i className="fa-solid fa-cloud-check"></i>
+                                            </div>
+                                        </div>
+                                        <div className="mt-3">
+                                            {syncStatus.state === 'success' ? (
+                                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Live Realtime
+                                                </span>
+                                            ) : syncStatus.state === 'error' ? (
+                                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                                                    <i className="fa-solid fa-triangle-exclamation"></i> Kendala DB
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-[11px] font-extrabold bg-slate-800 text-slate-300 border border-slate-700">
+                                                    <i className="fa-solid fa-hard-drive"></i> Mode Lokal
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-3 truncate font-mono pt-1 border-t border-slate-800/80">
+                                            {syncStatus.msg || 'Project ID: ' + firebaseProjectId}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* DEPOSIT PROGRESS WIDGET */}
+                                {currentDeposit > 0 && (
+                                    <div className="glass-card-dark p-5 rounded-3xl shadow-glass border border-brand-500/20 space-y-2">
+                                        <div className="flex justify-between items-center text-xs font-bold">
+                                            <span className="text-slate-300 flex items-center gap-2">
+                                                <i className="fa-solid fa-chart-simple text-brand-400"></i>
+                                                Penggunaan Uang Muka Periode {selectedMonth}
+                                            </span>
+                                            <span className="text-slate-200">
+                                                {formatRupiah(filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0))} / {formatRupiah(currentDeposit)} ({Math.min(Math.round((filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0) / currentDeposit) * 100), 999)}%)
+                                            </span>
+                                        </div>
+                                        <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800">
+                                            <div 
+                                                className={`h-full rounded-full transition-all duration-500 ${
+                                                    (filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0) / currentDeposit) > 1 
+                                                        ? 'bg-gradient-to-r from-rose-500 to-amber-500' 
+                                                        : 'bg-gradient-to-r from-brand-500 to-indigo-400'
+                                                }`}
+                                                style={{ width: `${Math.min((filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0) / currentDeposit) * 100, 100)}%` }}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    <div className="lg:col-span-2 glass-card-dark p-6 rounded-3xl shadow-glass space-y-4 border border-slate-800">
+                                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-slate-800 pb-4">
+                                            <div>
+                                                <h3 className="font-extrabold text-base flex items-center gap-2 text-white">
+                                                    <i className="fa-solid fa-chart-line text-brand-400"></i> Grafik Tren Pengeluaran e-Toll
+                                                </h3>
+                                                <p className="text-xs text-slate-400 mt-0.5">Visualisasi riwayat nominal harian transaksi e-Toll</p>
+                                            </div>
+                                            <select 
+                                                value={selectedMonth} 
+                                                onChange={e => setSelectedMonth(e.target.value)}
+                                                className="px-3 py-1.5 text-xs border border-slate-700 rounded-xl bg-slate-900 text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            >
+                                                <option value="ALL">Semua Bulan</option>
+                                                {availableMonths.map(m => (
+                                                    <option key={m} value={m}>{m}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <SpendingTrendChart transactions={transactions} selectedMonth={selectedMonth} />
+                                    </div>
+
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass space-y-4 border border-slate-800 flex flex-col justify-between">
+                                        <div className="border-b border-slate-800 pb-4">
+                                            <h3 className="font-extrabold text-base flex items-center gap-2 text-white">
+                                                <i className="fa-solid fa-chart-pie text-cyan-400"></i> Proporsi Penggunaan Kartu
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-0.5">Persentase pengeluaran per e-Toll</p>
+                                        </div>
+                                        <CardDistributionChart cards={cards} transactions={transactions} selectedMonth={selectedMonth} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                    <div className="lg:col-span-2 glass-card-dark p-6 rounded-3xl shadow-glass space-y-5 border border-slate-800">
+                                        <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                                            <div>
+                                                <h3 className="font-extrabold text-base flex items-center gap-2 text-white">
+                                                    <i className="fa-solid fa-credit-card text-brand-400"></i> Kartu e-Toll Terdaftar
+                                                </h3>
+                                                <p className="text-xs text-slate-400 mt-0.5">Pantau saldo akumulasi transaksi per nomor e-Toll</p>
+                                            </div>
+                                            <button 
+                                                onClick={() => setShowNfcModal(true)} 
+                                                className="text-xs font-extrabold text-purple-300 hover:bg-purple-500/20 px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 border border-purple-500/30 bg-purple-500/10"
+                                            >
+                                                <i className="fa-solid fa-nfc-symbol text-sm animate-pulse"></i> Tap NFC
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            {cards.map(card => {
+                                                const cardSpent = transactions
+                                                    .filter(t => t.etollNumber === card.number && (selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth))))
+                                                    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                                                return (
+                                                    <div 
+                                                        key={card.id} 
+                                                        className={`p-6 rounded-3xl bg-gradient-to-br ${card.color || 'from-indigo-600 via-purple-600 to-slate-900'} text-white shadow-xl relative overflow-hidden group transition-all duration-300 hover:scale-[1.01] border border-white/10`}
+                                                    >
+                                                        <div className="absolute -right-6 -bottom-6 w-32 h-32 bg-white/10 rounded-full blur-xl pointer-events-none"></div>
+                                                        
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div className="min-w-0">
+                                                                <div className="flex items-center gap-2 flex-wrap">
+                                                                    <span className="text-[10px] font-black uppercase tracking-wider bg-white/20 backdrop-blur-md px-2.5 py-0.5 rounded-full shrink-0">
+                                                                        {card.bank}
+                                                                    </span>
+                                                                    <span className="text-xs font-semibold text-white/90 truncate">{card.label}</span>
+                                                                </div>
+                                                                <p className="text-lg sm:text-xl font-mono font-bold mt-3 tracking-widest text-white/95 text-wrap-safe leading-snug">
+                                                                    {card.number}
+                                                                </p>
+                                                            </div>
+                                                            <i className="fa-solid fa-wifi rotate-90 text-2xl text-white/60 shrink-0"></i>
+                                                        </div>
+
+                                                        <div className="mt-6 pt-4 border-t border-white/20 flex justify-between items-end gap-2">
+                                                            <div className="min-w-0">
+                                                                <p className="text-[10px] font-semibold text-white/70 uppercase leading-none">Total Penggunaan ({selectedMonth}):</p>
+                                                                <p className="text-xl sm:text-2xl font-black tracking-tight mt-1 truncate">{formatRupiah(cardSpent)}</p>
+                                                            </div>
+                                                            <button 
+                                                                onClick={() => { setSelectedCardFilter(card.number); setActiveTab('transactions'); }}
+                                                                className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3.5 py-2 rounded-xl backdrop-blur-md transition shadow-sm flex items-center gap-1.5 shrink-0"
+                                                            >
+                                                                <span>Daftar</span>
+                                                                <i className="fa-solid fa-arrow-right text-[10px]"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="glass-card-dark p-6 rounded-3xl shadow-glass space-y-4 border border-slate-800">
+                                        <div className="border-b border-slate-800 pb-4">
+                                            <h3 className="font-extrabold text-base flex items-center gap-2 text-white">
+                                                <i className="fa-solid fa-building-columns text-emerald-400"></i> Top Lokasi / Gate Tol
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-0.5">Gerbang tol / merchant transaksi terbanyak</p>
+                                        </div>
+
+                                        <div className="space-y-4 pt-1">
+                                            {topMerchants.length === 0 ? (
+                                                <p className="text-xs text-slate-500 italic py-8 text-center">Belum ada transaksi pada periode ini.</p>
+                                            ) : (
+                                                topMerchants.map((m, idx) => (
+                                                    <div key={idx} className="space-y-1.5">
+                                                        <div className="flex justify-between text-xs font-bold gap-2">
+                                                            <span className="text-slate-200 truncate">{m.name}</span>
+                                                            <span className="text-emerald-400 font-mono shrink-0">{formatRupiah(m.amount)}</span>
+                                                        </div>
+                                                        <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                                                            <div 
+                                                                className="bg-gradient-to-r from-emerald-500 to-teal-400 h-full rounded-full transition-all duration-500"
+                                                                style={{ width: `${m.percent}%` }}
+                                                            ></div>
+                                                        </div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
+                        {/* TAB 2: TRANSACTIONS LIST */}
                         {activeTab === 'transactions' && (
-                            <div className="bg-white dark:bg-slate-800 rounded-2xl border p-4 space-y-4">
-                                <h3 className="font-extrabold text-sm">Daftar Transaksi e-Toll Real-Time</h3>
-                                <div className="overflow-x-auto">
+                            <div className="glass-card-dark rounded-3xl p-6 space-y-6 shadow-glass border border-slate-800">
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-5">
+                                    <div className="min-w-0">
+                                        <h3 className="font-extrabold text-lg text-white flex items-center gap-2">
+                                            <i className="fa-solid fa-receipt text-brand-400"></i> Daftar Transaksi e-Toll
+                                        </h3>
+                                        <p className="text-xs text-slate-400 mt-0.5">
+                                            Total <span className="font-bold text-slate-200">{filteredTransactions.length}</span> transaksi terdeteksi di sistem
+                                        </p>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                                        <div className="relative flex-1 sm:flex-initial">
+                                            <i className="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                            <input 
+                                                type="text"
+                                                placeholder="Cari merchant / invoice..."
+                                                value={searchQuery}
+                                                onChange={e => setSearchQuery(e.target.value)}
+                                                className="pl-9 pr-4 py-2.5 text-xs border border-slate-700 rounded-xl bg-slate-900/90 text-slate-200 w-full sm:w-60 focus:outline-none focus:ring-2 focus:ring-brand-500 font-medium"
+                                            />
+                                        </div>
+                                        <select 
+                                            value={selectedMonth} 
+                                            onChange={e => setSelectedMonth(e.target.value)}
+                                            className="px-3.5 py-2.5 text-xs border border-slate-700 rounded-xl bg-slate-900 text-slate-200 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        >
+                                            <option value="ALL">Semua Bulan</option>
+                                            {availableMonths.map(m => (
+                                                <option key={m} value={m}>{m}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800">
                                     <table className="w-full text-left text-xs">
                                         <thead>
-                                            <tr className="bg-slate-50 dark:bg-slate-900 text-slate-400 uppercase font-bold text-[10px]">
-                                                <th className="p-3">Tanggal</th>
-                                                <th className="p-3">Merchant</th>
-                                                <th className="p-3">Nomor e-Toll</th>
-                                                <th className="p-3">No. Invoice</th>
-                                                <th className="p-3 text-right">Nominal</th>
+                                            <tr className="bg-slate-900/90 text-slate-400 uppercase font-black text-[10px] tracking-wider border-b border-slate-800">
+                                                <th className="p-4 whitespace-nowrap">Tanggal</th>
+                                                <th className="p-4 min-w-[160px]">Merchant / Gate Tol</th>
+                                                <th className="p-4 whitespace-nowrap">Nomor e-Toll</th>
+                                                <th className="p-4 whitespace-nowrap">No. Invoice (Unik)</th>
+                                                <th className="p-4 text-right whitespace-nowrap">Nominal</th>
+                                                <th className="p-4 text-center whitespace-nowrap">Aksi</th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y">
-                                            {transactions.map(t => (
-                                                <tr key={t.id}>
-                                                    <td className="p-3">{formatDateIndo(t.date)}</td>
-                                                    <td className="p-3 font-bold">{t.merchant}</td>
-                                                    <td className="p-3 font-mono text-purple-600 font-bold">{t.etollNumber}</td>
-                                                    <td className="p-3 font-mono">{t.invoiceNumber}</td>
-                                                    <td className="p-3 text-right font-black">{formatRupiah(t.amount)}</td>
+                                        <tbody className="divide-y divide-slate-800/60">
+                                            {filteredTransactions.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan="6" className="p-12 text-center text-slate-400">
+                                                        <div className="w-16 h-16 rounded-2xl bg-slate-800/80 flex items-center justify-center mx-auto text-2xl text-slate-400 mb-3 border border-slate-700">
+                                                            <i className="fa-solid fa-inbox"></i>
+                                                        </div>
+                                                        <p className="font-bold text-sm text-slate-300">Belum ada data transaksi e-Toll</p>
+                                                        <p className="text-xs text-slate-400 mt-1">Coba sesuaikan filter bulan atau kata kunci pencarian Anda.</p>
+                                                    </td>
                                                 </tr>
-                                            ))}
+                                            ) : (
+                                                filteredTransactions.map(t => (
+                                                    <tr key={t.id} className="hover:bg-slate-800/40 transition-colors">
+                                                        <td className="p-4 font-semibold text-slate-300 whitespace-nowrap">{formatDateIndo(t.date)}</td>
+                                                        <td className="p-4 font-extrabold text-white text-wrap-safe leading-normal max-w-xs">{t.merchant}</td>
+                                                        <td className="p-4 font-mono text-purple-300 font-bold whitespace-nowrap">{t.etollNumber}</td>
+                                                        <td className="p-4 font-mono whitespace-nowrap">
+                                                            <span className="bg-slate-800 text-slate-200 px-2.5 py-1 rounded-lg text-[11px] font-bold border border-slate-700">
+                                                                {t.invoiceNumber}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-4 text-right font-black text-brand-400 text-sm whitespace-nowrap">
+                                                            {formatRupiah(t.amount)}
+                                                        </td>
+                                                        <td className="p-4 text-center whitespace-nowrap">
+                                                            <button 
+                                                                onClick={() => setDeletingTx(t)}
+                                                                className="w-8 h-8 rounded-xl text-rose-400 hover:bg-rose-500/10 transition flex items-center justify-center mx-auto border border-rose-500/20"
+                                                                title="Hapus Transaksi"
+                                                            >
+                                                                <i className="fa-solid fa-trash-can text-xs"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
                         )}
 
+                        {/* TAB 3: MONTHLY SPJ RECAP WITH EXCEL EXPORT */}
+                        {activeTab === 'monthly_recap' && (
+                            <div className="space-y-6">
+                                <div className="glass-card-dark p-6 sm:p-8 rounded-3xl shadow-glass space-y-6 border border-slate-800">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-5">
+                                        <div>
+                                            <h3 className="font-extrabold text-lg text-white flex items-center gap-2">
+                                                <i className="fa-solid fa-file-invoice-dollar text-brand-400"></i> Rekapitulasi SPJ Pembelian e-Toll
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-0.5">Laporan pertanggungjawaban resmi biaya operasional e-Toll</p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2.5">
+                                            <button 
+                                                onClick={() => setShowDepositModal(true)}
+                                                className="bg-brand-600/20 hover:bg-brand-600/30 text-brand-300 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-brand-500/30 transition active:scale-95"
+                                            >
+                                                <i className="fa-solid fa-coins text-sm text-brand-400"></i> Atur Deposit Bulanan
+                                            </button>
+                                            {/* EXCEL EXPORT BUTTON */}
+                                            <button 
+                                                onClick={handleExportExcel}
+                                                className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 border border-emerald-500/30 shadow-md transition active:scale-95"
+                                                title="Download File Excel (.xlsx) Lengkap Tanda Tangan"
+                                            >
+                                                <i className="fa-solid fa-file-excel text-sm text-emerald-400"></i> Export Excel (.xlsx)
+                                            </button>
+                                            <button 
+                                                onClick={handleExportCsv}
+                                                className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-sm transition active:scale-95 border border-slate-700"
+                                                title="Ekstrak Data CSV Sederhana"
+                                            >
+                                                <i className="fa-solid fa-file-csv text-sm text-teal-400"></i> CSV
+                                            </button>
+                                            <button 
+                                                onClick={() => setShowSpjPrintModal(true)}
+                                                className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-2 shadow-lg shadow-brand-500/20 transition active:scale-95"
+                                            >
+                                                <i className="fa-solid fa-print text-sm"></i> Cetak SPJ (PDF)
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Profile Settings with Fixed Supervisor Name Input */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs bg-slate-900/80 p-5 rounded-2xl border border-slate-800">
+                                        <div>
+                                            <label className="block font-extrabold text-slate-400 mb-1.5">Nama Pemohon SPJ:</label>
+                                            <input 
+                                                type="text" 
+                                                value={spjProfile.applicantName} 
+                                                onChange={e => setSpjProfile({ ...spjProfile, applicantName: e.target.value })}
+                                                className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-extrabold text-slate-400 mb-1.5">Divisi / Departemen:</label>
+                                            <input 
+                                                type="text" 
+                                                value={spjProfile.division} 
+                                                onChange={e => setSpjProfile({ ...spjProfile, division: e.target.value })}
+                                                className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-extrabold text-slate-400 mb-1.5">Nopol Kendaraan:</label>
+                                            <input 
+                                                type="text" 
+                                                value={spjProfile.vehicleNopol} 
+                                                onChange={e => setSpjProfile({ ...spjProfile, vehicleNopol: e.target.value })}
+                                                className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-extrabold text-slate-400 mb-1.5">Perusahaan / Instansi:</label>
+                                            <input 
+                                                type="text" 
+                                                value={spjProfile.companyName} 
+                                                onChange={e => setSpjProfile({ ...spjProfile, companyName: e.target.value })}
+                                                className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block font-extrabold text-slate-400 mb-1.5">Atasan / Supervisor:</label>
+                                            <input 
+                                                type="text" 
+                                                value={spjProfile.supervisorName || ''} 
+                                                onChange={e => setSpjProfile({ ...spjProfile, supervisorName: e.target.value })}
+                                                placeholder="Nama Supervisor"
+                                                className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-800/90 text-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Monthly Summary Box with Deposit */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        <div className="p-5 bg-slate-900/90 border border-slate-800 rounded-2xl space-y-1">
+                                            <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Deposit Uang Muka Diterima</p>
+                                            <p className="text-xl font-black text-white">{formatRupiah(currentDeposit)}</p>
+                                            <button onClick={() => setShowDepositModal(true)} className="text-[11px] text-brand-400 hover:underline font-bold pt-1 block">
+                                                + Ubah Uang Muka Periode Ini
+                                            </button>
+                                        </div>
+
+                                        <div className="p-5 bg-gradient-to-r from-brand-900/30 to-indigo-900/30 border border-brand-500/20 rounded-2xl space-y-1">
+                                            <p className="text-[11px] font-black text-brand-400 uppercase tracking-wider">Total Realisasi Pengeluaran</p>
+                                            <p className="text-xl font-black text-white">{formatRupiah(filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0))}</p>
+                                            <p className="text-[11px] text-slate-400 italic font-semibold">{filteredTransactions.length} Struk Terbilang</p>
+                                        </div>
+
+                                        <div className={`p-5 rounded-2xl border space-y-1 ${
+                                            (currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0
+                                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                                                : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                                        }`}>
+                                            <p className="text-[11px] font-black uppercase tracking-wider">
+                                                {(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 ? 'Sisa Uang Muka (Pengembalian)' : 'Kekurangan Bayar (Reimburse)'}
+                                            </p>
+                                            <p className="text-xl font-black">
+                                                {formatRupiah(Math.abs(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)))}
+                                            </p>
+                                            <p className="text-[11px] font-semibold opacity-90">
+                                                {(currentDeposit - filteredTransactions.reduce((s,t) => s + Number(t.amount||0), 0)) >= 0 ? 'Saldo deposit masih mencukupi' : 'Pengeluaran melebihi deposit awal'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* TAB 4: CLOUD CONFIG */}
                         {activeTab === 'cloud_config' && (
-                            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border space-y-4 max-w-2xl mx-auto">
-                                <h3 className="font-extrabold text-lg flex items-center gap-2 text-brand-600">
-                                    <i className="fa-solid fa-cloud"></i> Pengaturan Cloud Sync Bot 24 Jam
-                                </h3>
-                                <div className="space-y-3 text-xs">
-                                    <div>
-                                        <label className="block font-bold mb-1">Firebase Project ID (Cloud Database):</label>
+                            <div className="glass-card-dark p-6 sm:p-8 rounded-3xl shadow-glass space-y-6 max-w-3xl mx-auto border border-slate-800">
+                                <div className="border-b border-slate-800 pb-4">
+                                    <h3 className="font-extrabold text-xl flex items-center gap-2 text-white">
+                                        <i className="fa-solid fa-robot text-sky-400"></i> Integrasi Bot Telegram 24 Jam Nonstop
+                                    </h3>
+                                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                                        Hubungkan aplikasi ini dengan Cloudflare Worker & Firebase Realtime Database untuk menerima foto struk dari Bot Telegram 24/7 secara otomatis.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-5 text-xs">
+                                    <div className="space-y-1.5">
+                                        <label className="block font-extrabold text-slate-300">
+                                            1. Firebase Project ID (Realtime DB):
+                                        </label>
                                         <input
                                             type="text"
-                                            placeholder="rekaptoll-db-12345"
-                                            value={firebaseProjectId}
-                                            onChange={(e) => setFirebaseProjectId(e.target.value)}
-                                            className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono"
+                                            placeholder="etoll-3366c"
+                                            value={tempFbPid}
+                                            onChange={(e) => setTempFbPid(e.target.value)}
+                                            className="w-full p-3.5 bg-slate-900 border border-slate-700 rounded-2xl font-mono text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold"
                                         />
+                                        <p className="text-[11px] text-slate-400">
+                                            Project ID dari Firebase Console Anda (default: <b className="font-mono text-brand-300">etoll-3366c</b>).
+                                        </p>
                                     </div>
-                                    <div>
-                                        <label className="block font-bold mb-1">Gemini AI API Key (OCR):</label>
+
+                                    <div className="space-y-1.5">
+                                        <label className="block font-extrabold text-slate-300">
+                                            2. Gemini AI API Key (Untuk OCR Struk Web):
+                                        </label>
                                         <input
                                             type="password"
                                             placeholder="AIzaSy..."
                                             value={geminiApiKey}
                                             onChange={(e) => setGeminiApiKey(e.target.value)}
-                                            className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono"
+                                            className="w-full p-3.5 bg-slate-900 border border-slate-700 rounded-2xl font-mono text-xs text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500 font-semibold"
                                         />
                                     </div>
-                                    <p className="text-[11px] text-slate-500">
-                                        Setelah memasukkan Firebase Project ID, data transaksi yang dikirim ke Telegram Bot 24 Jam akan otomatis tersinkronisasi ke tampilan web ini secara real-time!
-                                    </p>
+
+                                    <div className="pt-2">
+                                        <button 
+                                            onClick={handleSaveCloudSettings} 
+                                            disabled={isSyncing}
+                                            className="w-full py-3.5 bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-extrabold rounded-2xl shadow-lg shadow-brand-500/25 text-xs flex items-center justify-center gap-2 transition active:scale-98"
+                                        >
+                                            {isSyncing ? (
+                                                <>
+                                                    <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                                    <span>Menguji Koneksi Realtime DB...</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <i className="fa-solid fa-floppy-disk"></i>
+                                                    <span>Simpan & Tes Koneksi Database</span>
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+
+                                    <div className={`p-4 rounded-2xl border text-xs transition-all ${
+                                        syncStatus.state === 'success' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' :
+                                        syncStatus.state === 'error' ? 'bg-rose-500/10 border-rose-500/30 text-rose-300' :
+                                        'bg-slate-900 border-slate-800 text-slate-300'
+                                    }`}>
+                                        <div className="flex items-center gap-2 font-bold">
+                                            <i className={`fa-solid ${
+                                                syncStatus.state === 'success' ? 'fa-circle-check text-emerald-400' :
+                                                syncStatus.state === 'error' ? 'fa-triangle-exclamation text-rose-400' :
+                                                'fa-circle-info text-slate-400'
+                                            }`}></i>
+                                            <span>Status Realtime DB:</span>
+                                        </div>
+                                        <p className="mt-1 font-mono text-[11px] text-wrap-safe">{syncStatus.msg || 'Belum dihubungkan ke Firebase Realtime DB.'}</p>
+                                    </div>
                                 </div>
                             </div>
                         )}
                     </main>
+
+                    {}
+                    {/* MODAL 1: SCAN STRUK & ADD TRANSACTION */}
+                    {showScanModal && (
+                        <ScanAndAddModal 
+                            userApiKey={geminiApiKey}
+                            checkDuplicateInvoice={checkDuplicateInvoice}
+                            cards={cards}
+                            onSave={handleSaveTransaction}
+                            onClose={() => setShowScanModal(false)}
+                            showToastNotification={showToastNotification}
+                        />
+                    )}
+
+                    {/* MODAL 2: NFC READER */}
+                    {showNfcModal && (
+                        <NfcModal 
+                            cards={cards}
+                            transactions={transactions}
+                            currentMonth={currentYearMonth}
+                            onClose={() => setShowNfcModal(false)}
+                        />
+                    )}
+
+                    {/* MODAL: SET DEPOSIT UANG MUKA */}
+                    {showDepositModal && (
+                        <DepositModal 
+                            selectedMonth={selectedMonth}
+                            currentDeposit={currentDeposit}
+                            onSave={handleSaveDeposit}
+                            onClose={() => setShowDepositModal(false)}
+                        />
+                    )}
+
+                    {/* MODAL 3: CONFIRM DELETE */}
+                    {deletingTx && (
+                        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                            <div className="glass-card-dark p-6 rounded-3xl max-w-sm w-full space-y-5 text-center shadow-2xl border border-slate-800">
+                                <div className="w-14 h-14 rounded-2xl bg-rose-500/10 text-rose-400 flex items-center justify-center mx-auto text-2xl border border-rose-500/20">
+                                    <i className="fa-solid fa-trash-can"></i>
+                                </div>
+                                <div>
+                                    <h4 className="font-extrabold text-base text-white">Hapus Transaksi Ini?</h4>
+                                    <p className="text-xs text-slate-400 mt-1.5 leading-relaxed text-wrap-safe">
+                                        Invoice <span className="font-mono font-bold text-slate-200">{deletingTx.invoiceNumber}</span> akan dihapus. Nomor invoice ini kini akan terbebas dan dapat di-scan kembali.
+                                    </p>
+                                </div>
+                                <div className="flex gap-2.5">
+                                    <button onClick={() => setDeletingTx(null)} className="flex-1 py-3 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition">
+                                        Batal
+                                    </button>
+                                    <button onClick={() => handleDeleteTransaction(deletingTx.id)} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/25 transition">
+                                        Ya, Hapus
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL 4: SPJ PRINT VIEW */}
+                    {showSpjPrintModal && (
+                        <SpjPrintModal 
+                            spjProfile={spjProfile}
+                            selectedMonth={selectedMonth}
+                            transactions={filteredTransactions}
+                            onClose={() => setShowSpjPrintModal(false)}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function ScanAndAddModal({ userApiKey, checkDuplicateInvoice, cards, onSave, onClose, showToastNotification }) {
+            const [selectedImage, setSelectedImage] = React.useState(null);
+            const [isScanning, setIsScanning] = React.useState(false);
+            const [duplicateWarning, setDuplicateWarning] = React.useState(false);
+            const [modalApiKey, setModalApiKey] = React.useState(userApiKey || '');
+
+            const [formData, setFormData] = React.useState({
+                etollNumber: '',
+                merchant: '',
+                amount: '',
+                invoiceNumber: '',
+                date: new Date().toISOString().substring(0, 10)
+            });
+
+            const handleFileSelect = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setSelectedImage(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleRunOcr = async () => {
+                if (!selectedImage) return;
+                setIsScanning(true);
+                try {
+                    const result = await callGeminiOCR(selectedImage, modalApiKey);
+                    if (result) {
+                        const formattedCard = formatCardNumber(result.etollNumber || '');
+                        const cleanInvoice = (result.invoiceNumber || '').toString().trim().toUpperCase();
+
+                        setFormData({
+                            etollNumber: formattedCard,
+                            merchant: result.merchant || 'Gate Tol / Rest Area',
+                            amount: result.amount || '',
+                            invoiceNumber: cleanInvoice,
+                            date: result.date || new Date().toISOString().substring(0, 10)
+                        });
+
+                        if (cleanInvoice && checkDuplicateInvoice(cleanInvoice)) {
+                            setDuplicateWarning(true);
+                        } else {
+                            setDuplicateWarning(false);
+                        }
+                        showToastNotification("Struk berhasil di-scan dengan AI Gemini!");
+                    }
+                } catch (err) {
+                    showToastNotification(err.message || "Gagal OCR Struk. Pastikan API Key diatur.", "error");
+                } finally {
+                    setIsScanning(false);
+                }
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (checkDuplicateInvoice(formData.invoiceNumber)) {
+                    setDuplicateWarning(true);
+                    return;
+                }
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="glass-card-dark p-6 sm:p-8 rounded-3xl max-w-lg w-full space-y-5 my-8 shadow-2xl border border-slate-800">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-4">
+                            <h3 className="font-extrabold text-base flex items-center gap-2 text-brand-400">
+                                <i className="fa-solid fa-camera text-lg"></i> Scan Struk / Tambah Transaksi
+                            </h3>
+                            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4 text-xs">
+                            {!userApiKey && (
+                                <div className="p-3.5 bg-amber-500/10 border border-amber-500/20 rounded-2xl space-y-1.5">
+                                    <label className="block font-bold text-amber-300">Masukkan Gemini API Key untuk OCR Otomatis:</label>
+                                    <input 
+                                        type="password"
+                                        placeholder="AIzaSy..."
+                                        value={modalApiKey}
+                                        onChange={e => setModalApiKey(e.target.value)}
+                                        className="w-full p-2.5 border border-slate-700 rounded-xl font-mono text-xs bg-slate-900 text-slate-100"
+                                    />
+                                </div>
+                            )}
+
+                            <div className="border-2 border-dashed border-slate-700 p-5 rounded-2xl text-center space-y-3 bg-slate-900/50">
+                                {selectedImage ? (
+                                    <div className="space-y-3">
+                                        <img src={selectedImage} alt="Struk Preview" className="max-h-52 mx-auto rounded-xl object-contain shadow-md" />
+                                        <div className="flex justify-center gap-2">
+                                            <button 
+                                                type="button" 
+                                                onClick={handleRunOcr} 
+                                                disabled={isScanning}
+                                                className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-brand-500/20 text-xs"
+                                            >
+                                                {isScanning ? (
+                                                    <>
+                                                        <i className="fa-solid fa-circle-notch animate-spin"></i>
+                                                        <span>Memproses AI OCR...</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <i className="fa-solid fa-wand-magic-sparkles"></i>
+                                                        <span>Ekstrak Data dengan AI</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                            <label className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2.5 rounded-xl cursor-pointer font-bold text-xs flex items-center border border-slate-700">
+                                                <span>Ganti Foto</span>
+                                                <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                                            </label>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <label className="cursor-pointer block py-5 space-y-2">
+                                        <div className="w-14 h-14 rounded-2xl bg-brand-500/10 text-brand-400 border border-brand-500/20 flex items-center justify-center mx-auto text-2xl">
+                                            <i className="fa-solid fa-cloud-arrow-up"></i>
+                                        </div>
+                                        <p className="font-extrabold text-sm text-white">Pilih / Foto Struk e-Toll</p>
+                                        <p className="text-[11px] text-slate-400">Format JPG, PNG (Struk Indomaret, Livin, Flazz, dll)</p>
+                                        <input type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
+                                    </label>
+                                )}
+                            </div>
+
+                            {duplicateWarning && (
+                                <div className="p-3.5 bg-rose-500/10 border border-rose-500/20 text-rose-300 rounded-2xl text-xs flex items-center gap-3">
+                                    <i className="fa-solid fa-circle-exclamation text-rose-400 text-lg shrink-0"></i>
+                                    <div className="min-w-0">
+                                        <p className="font-bold">Nomor Invoice Duplikat Terdeteksi!</p>
+                                        <p className="text-[11px] text-wrap-safe">Invoice <b className="font-mono">{formData.invoiceNumber}</b> sudah ada di daftar. Mohon periksa kembali.</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            <form onSubmit={handleSubmit} className="space-y-3.5">
+                                <div>
+                                    <label className="block font-extrabold mb-1 text-slate-300">Nomor Kartu e-Toll (16 Digit):</label>
+                                    <input 
+                                        type="text"
+                                        required
+                                        placeholder="6032 0000 0000 0000"
+                                        value={formData.etollNumber}
+                                        onChange={e => setFormData({ ...formData, etollNumber: formatCardNumber(e.target.value) })}
+                                        className="w-full p-3 border border-slate-700 rounded-xl font-mono text-xs bg-slate-900 text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block font-extrabold mb-1 text-slate-300">Merchant / Tempat:</label>
+                                        <input 
+                                            type="text"
+                                            required
+                                            placeholder="Indomaret / Tol Jagorawi"
+                                            value={formData.merchant}
+                                            onChange={e => setFormData({ ...formData, merchant: e.target.value })}
+                                            className="w-full p-3 border border-slate-700 rounded-xl text-xs bg-slate-900 text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block font-extrabold mb-1 text-slate-300">Nominal (Rp):</label>
+                                        <input 
+                                            type="number"
+                                            required
+                                            placeholder="100000"
+                                            value={formData.amount}
+                                            onChange={e => setFormData({ ...formData, amount: e.target.value })}
+                                            className="w-full p-3 border border-slate-700 rounded-xl text-xs font-black bg-slate-900 text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="block font-extrabold mb-1 text-slate-300">No. Invoice (Unik):</label>
+                                        <input 
+                                            type="text"
+                                            required
+                                            placeholder="INV-998231"
+                                            value={formData.invoiceNumber}
+                                            onChange={e => {
+                                                const val = e.target.value.toUpperCase();
+                                                setFormData({ ...formData, invoiceNumber: val });
+                                                if (val && checkDuplicateInvoice(val)) {
+                                                    setDuplicateWarning(true);
+                                                } else {
+                                                    setDuplicateWarning(false);
+                                                }
+                                            }}
+                                            className="w-full p-3 border border-slate-700 rounded-xl font-mono text-xs bg-slate-900 text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block font-extrabold mb-1 text-slate-300">Tanggal Transaksi:</label>
+                                        <input 
+                                            type="date"
+                                            required
+                                            value={formData.date}
+                                            onChange={e => setFormData({ ...formData, date: e.target.value })}
+                                            className="w-full p-3 border border-slate-700 rounded-xl text-xs bg-slate-900 text-slate-100 font-bold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="pt-3 flex justify-end gap-2.5">
+                                    <button type="button" onClick={onClose} className="px-4 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">
+                                        Batal
+                                    </button>
+                                    <button 
+                                        type="submit" 
+                                        disabled={duplicateWarning}
+                                        className={`px-6 py-2.5 rounded-xl text-xs font-extrabold text-white shadow-lg ${duplicateWarning ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-brand-600 hover:bg-brand-500 shadow-brand-500/25'}`}
+                                    >
+                                        Simpan Transaksi
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function NfcModal({ cards, transactions, currentMonth, onClose }) {
+            const [scannedCardNum, setScannedCardNum] = React.useState('');
+
+            const handleSimulateNfc = () => {
+                const randomCard = cards[Math.floor(Math.random() * cards.length)]?.number || '6032 9812 3456 7890';
+                setScannedCardNum(randomCard);
+            };
+
+            const cardSpentThisMonth = React.useMemo(() => {
+                if (!scannedCardNum) return 0;
+                return transactions
+                    .filter(t => t.etollNumber === scannedCardNum && t.date && t.date.startsWith(currentMonth))
+                    .reduce((s, t) => s + Number(t.amount || 0), 0);
+            }, [scannedCardNum, transactions, currentMonth]);
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="glass-card-dark p-6 sm:p-8 rounded-3xl max-w-md w-full space-y-5 text-center shadow-2xl border border-slate-800">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                            <h3 className="font-extrabold text-base flex items-center gap-2 text-purple-400">
+                                <i className="fa-solid fa-nfc-symbol"></i> NFC Card Reader
+                            </h3>
+                            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div className="py-6 space-y-4">
+                            <div className="w-24 h-24 rounded-full bg-purple-500/15 text-purple-400 flex items-center justify-center mx-auto text-4xl pulse-glow border border-purple-500/30">
+                                <i className="fa-solid fa-wifi rotate-90"></i>
+                            </div>
+                            <p className="text-xs text-slate-400 font-medium max-w-xs mx-auto leading-relaxed">
+                                Tempelkan kartu e-Toll (Mandiri e-Money, Flazz, Brizzi) ke bagian belakang HP Anda.
+                            </p>
+
+                            <button onClick={handleSimulateNfc} className="text-xs bg-purple-500/15 text-purple-300 hover:bg-purple-500/25 px-4 py-2.5 rounded-xl font-extrabold border border-purple-500/30 transition">
+                                Simulasi Tap NFC (Demo)
+                            </button>
+                        </div>
+
+                        {scannedCardNum && (
+                            <div className="p-4 bg-purple-500/10 rounded-2xl border border-purple-500/30 text-left space-y-2">
+                                <p className="text-[10px] font-black text-purple-400 uppercase tracking-wider">Kartu NFC Terdeteksi:</p>
+                                <p className="text-lg font-mono font-black text-white tracking-widest">{scannedCardNum}</p>
+                                <div className="pt-2 border-t border-purple-500/20 flex justify-between items-center">
+                                    <span className="text-xs text-slate-400">Total Penggunaan ({currentMonth}):</span>
+                                    <span className="text-lg font-black text-purple-300">{formatRupiah(cardSpentThisMonth)}</span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function SpjPrintModal({ spjProfile, selectedMonth, transactions, onClose }) {
+            const totalAmount = transactions.reduce((sum, t) => sum + Number(t.amount || 0), 0);
+            const currentDeposit = React.useMemo(() => {
+                const stored = JSON.parse(localStorage.getItem('etoll_monthly_deposits')) || {};
+                if (selectedMonth === 'ALL') {
+                    return Object.values(stored).reduce((a, b) => a + Number(b || 0), 0);
+                }
+                return Number(stored[selectedMonth] || 0);
+            }, [selectedMonth]);
+
+            const sisaDeposit = currentDeposit - totalAmount;
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
+                    <div className="bg-white text-slate-900 p-8 rounded-3xl max-w-3xl w-full space-y-6 my-8 shadow-2xl print-container">
+                        <div className="flex justify-between items-center border-b pb-4 no-print">
+                            <h3 className="font-extrabold text-sm text-slate-800">Dokumen Lembar SPJ Resmi (Siap Cetak)</h3>
+                            <div className="flex gap-2">
+                                <button onClick={() => window.print()} className="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-md">
+                                    <i className="fa-solid fa-print"></i> Cetak / Simpan PDF
+                                </button>
+                                <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center">
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-4 space-y-6 bg-white text-black font-sans">
+                            {/* Kop Surat */}
+                            <div className="border-b-2 border-slate-900 pb-4 flex justify-between items-end">
+                                <div>
+                                    <h2 className="font-black text-2xl uppercase tracking-wider text-slate-900">{spjProfile.companyName || 'PT NUSANTARA TRANS'}</h2>
+                                    <p className="text-xs text-slate-600 font-bold tracking-wide mt-1">SURAT PERTANGGUNGJAWABAN (SPJ) BIAYA OPERASIONAL E-TOLL</p>
+                                </div>
+                                <div className="text-right text-xs">
+                                    <p className="font-bold text-slate-800">Periode: {selectedMonth}</p>
+                                    <p className="text-slate-500">Tanggal Buat: {new Date().toLocaleDateString('id-ID')}</p>
+                                </div>
+                            </div>
+
+                            {/* Metadata */}
+                            <div className="grid grid-cols-2 gap-4 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+                                <div className="space-y-1">
+                                    <p><span className="font-bold text-slate-600">Nama Pemohon:</span> {spjProfile.applicantName}</p>
+                                    <p><span className="font-bold text-slate-600">Divisi / Dept:</span> {spjProfile.division}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p><span className="font-bold text-slate-600">Nopol Kendaraan:</span> {spjProfile.vehicleNopol}</p>
+                                    <p><span className="font-bold text-slate-600">Atasan / Supervisor:</span> {spjProfile.supervisorName || '-'}</p>
+                                </div>
+                            </div>
+
+                            {/* Table */}
+                            <table className="w-full text-left text-xs border-collapse border border-slate-300">
+                                <thead>
+                                    <tr className="bg-slate-100 border-b border-slate-300 text-slate-700">
+                                        <th className="p-2.5 border border-slate-300 text-center">No</th>
+                                        <th className="p-2.5 border border-slate-300">Tanggal</th>
+                                        <th className="p-2.5 border border-slate-300">Merchant / Gate</th>
+                                        <th className="p-2.5 border border-slate-300">Nomor Kartu</th>
+                                        <th className="p-2.5 border border-slate-300">No. Invoice</th>
+                                        <th className="p-2.5 border border-slate-300 text-right">Nominal (Rp)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {transactions.map((t, idx) => (
+                                        <tr key={t.id} className="border-b border-slate-200">
+                                            <td className="p-2.5 border border-slate-300 text-center font-bold">{idx + 1}</td>
+                                            <td className="p-2.5 border border-slate-300 whitespace-nowrap">{formatDateIndo(t.date)}</td>
+                                            <td className="p-2.5 border border-slate-300 font-bold">{t.merchant}</td>
+                                            <td className="p-2.5 border border-slate-300 font-mono whitespace-nowrap">{t.etollNumber}</td>
+                                            <td className="p-2.5 border border-slate-300 font-mono whitespace-nowrap">{t.invoiceNumber}</td>
+                                            <td className="p-2.5 border border-slate-300 text-right font-bold whitespace-nowrap">{Number(t.amount).toLocaleString('id-ID')}</td>
+                                        </tr>
+                                    ))}
+                                    <tr className="font-bold bg-slate-50 text-xs">
+                                        <td colSpan="5" className="p-2.5 border border-slate-300 text-right">TOTAL REALISASI PENGELUARAN:</td>
+                                        <td className="p-2.5 border border-slate-300 text-right font-black text-brand-700">{formatRupiah(totalAmount)}</td>
+                                    </tr>
+                                    <tr className="font-bold bg-slate-50 text-xs">
+                                        <td colSpan="5" className="p-2.5 border border-slate-300 text-right">DEPOSIT UANG MUKA DITERIMA:</td>
+                                        <td className="p-2.5 border border-slate-300 text-right font-black text-slate-800">{formatRupiah(currentDeposit)}</td>
+                                    </tr>
+                                    <tr className={`font-black text-xs ${sisaDeposit >= 0 ? 'bg-emerald-50 text-emerald-900' : 'bg-rose-50 text-rose-900'}`}>
+                                        <td colSpan="5" className="p-3 border border-slate-300 text-right">
+                                            {sisaDeposit >= 0 ? 'SISA UANG MUKA (DIKEMBALIKAN):' : 'KEKURANGAN BAYAR (DI-REIMBURSE):'}
+                                        </td>
+                                        <td className="p-3 border border-slate-300 text-right text-sm font-extrabold">{formatRupiah(Math.abs(sisaDeposit))}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+
+                            <p className="text-xs italic font-semibold text-slate-700">Terbilang Realisasi: {terbilangRupiah(totalAmount)}</p>
+
+                            {/* Signatures */}
+                            <div className="grid grid-cols-3 gap-4 text-center text-xs pt-8">
+                                <div>
+                                    <p className="font-medium text-slate-600">Pemohon</p>
+                                    <div className="h-16"></div>
+                                    <p className="font-bold underline text-slate-900">{spjProfile.applicantName}</p>
+                                </div>
+                                <div>
+                                    <p className="font-medium text-slate-600">Pemeriksa / Keuangan</p>
+                                    <div className="h-16"></div>
+                                    <p className="font-bold underline text-slate-900">( ............................ )</p>
+                                </div>
+                                <div>
+                                    <p className="font-medium text-slate-600">Mengetahui / Atasan</p>
+                                    <div className="h-16"></div>
+                                    <p className="font-bold underline text-slate-900">{spjProfile.supervisorName || 'Hendra Wijaya'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function DepositModal({ selectedMonth, currentDeposit, onSave, onClose }) {
+            const monthKey = selectedMonth === 'ALL' ? new Date().toISOString().substring(0, 7) : selectedMonth;
+            const [amount, setAmount] = React.useState(currentDeposit || 0);
+
+            const handlePreset = (val) => {
+                setAmount(val);
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(monthKey, amount);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+                    <div className="glass-card-dark p-6 sm:p-8 rounded-3xl max-w-md w-full space-y-5 shadow-2xl border border-slate-800">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                            <h3 className="font-extrabold text-base flex items-center gap-2 text-brand-400">
+                                <i className="fa-solid fa-coins"></i> Deposit Uang Muka e-Toll
+                            </h3>
+                            <button onClick={onClose} className="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+                            <div>
+                                <label className="block font-bold text-slate-400 mb-1">Periode Bulan:</label>
+                                <input 
+                                    type="text" 
+                                    disabled 
+                                    value={monthKey}
+                                    className="w-full p-3 bg-slate-900 border border-slate-800 rounded-xl font-mono text-slate-300 font-bold"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block font-extrabold text-slate-200 mb-1">Nominal Uang Muka (Rp):</label>
+                                <input 
+                                    type="number" 
+                                    required
+                                    placeholder="1500000"
+                                    value={amount}
+                                    onChange={e => setAmount(e.target.value)}
+                                    className="w-full p-3.5 bg-slate-900 border border-slate-700 rounded-xl text-base font-black text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                />
+                            </div>
+
+                            <div>
+                                <p className="font-bold text-slate-400 mb-2">Pilihan Cepat:</p>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button type="button" onClick={() => handlePreset(500000)} className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-200 font-bold border border-slate-700">
+                                        Rp 500.000
+                                    </button>
+                                    <button type="button" onClick={() => handlePreset(1000000)} className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-200 font-bold border border-slate-700">
+                                        Rp 1.000.000
+                                    </button>
+                                    <button type="button" onClick={() => handlePreset(1500000)} className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-200 font-bold border border-slate-700">
+                                        Rp 1.500.000
+                                    </button>
+                                    <button type="button" onClick={() => handlePreset(2000000)} className="py-2 px-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-slate-200 font-bold border border-slate-700">
+                                        Rp 2.000.000
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="pt-3 flex gap-2.5">
+                                <button type="button" onClick={onClose} className="flex-1 py-3 border border-slate-700 rounded-xl text-slate-300 font-bold hover:bg-slate-800">
+                                    Batal
+                                </button>
+                                <button type="submit" className="flex-1 py-3 bg-brand-600 hover:bg-brand-500 text-white font-extrabold rounded-xl shadow-lg shadow-brand-500/25">
+                                    Simpan Deposit
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             );
         }
