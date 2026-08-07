@@ -48,7 +48,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
     <style>
-        /* Custom non-white dark mesh background styling */
         body { 
             font-family: 'Inter', sans-serif; 
             background: #090d16;
@@ -60,7 +59,6 @@
             color: #f1f5f9;
         }
 
-        /* Glassmorphism utility */
         .glass-panel {
             background: rgba(15, 23, 42, 0.75);
             backdrop-filter: blur(16px);
@@ -105,7 +103,7 @@
         function formatCardNumber(val) {
             if (!val) return '';
             const cleaned = val.toString().replace(/\D/g, '').slice(0, 16);
-            return cleaned.replace(/(.{4})/g, '$1 ').trim();
+            return cleaned.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
         }
 
         function terbilangRupiah(num) {
@@ -125,42 +123,52 @@
             return terbilang(num).replace(/\s+/g, ' ').trim() + " Rupiah";
         }
 
-        function getMerchantBadge(merchant) {
-            const m = (merchant || '').toLowerCase();
-            if (m.includes('mandiri') || m.includes('e-money') || m.includes('livin')) {
-                return { label: merchant || 'Mandiri e-Money', icon: 'fa-building-columns', bg: 'bg-blue-900/60 text-blue-300 border border-blue-500/40 shadow-sm shadow-blue-500/20' };
-            }
-            if (m.includes('bca') || m.includes('flazz')) {
-                return { label: merchant || 'BCA Flazz', icon: 'fa-credit-card', bg: 'bg-sky-900/60 text-sky-300 border border-sky-500/40 shadow-sm shadow-sky-500/20' };
-            }
-            if (m.includes('bri') || m.includes('brizzi')) {
-                return { label: merchant || 'BRI Brizzi', icon: 'fa-wallet', bg: 'bg-cyan-900/60 text-cyan-300 border border-cyan-500/40 shadow-sm shadow-cyan-500/20' };
-            }
-            if (m.includes('indomaret') || m.includes('alfamart')) {
-                return { label: merchant || 'Retail Store', icon: 'fa-store', bg: 'bg-amber-900/60 text-amber-300 border border-amber-500/40 shadow-sm shadow-amber-500/20' };
-            }
-            if (m.includes('tokopedia') || m.includes('shopee') || m.includes('blibli')) {
-                return { label: merchant || 'E-Commerce', icon: 'fa-cart-shopping', bg: 'bg-emerald-900/60 text-emerald-300 border border-emerald-500/40 shadow-sm shadow-emerald-500/20' };
-            }
-            return { label: merchant || 'Gate Tol / Rest Area', icon: 'fa-road', bg: 'bg-slate-800/80 text-slate-300 border border-slate-600/50 shadow-sm shadow-slate-500/20' };
-        }
-
         function detectBankFromCardNumber(cardNum, merchant = '') {
             const clean = (cardNum || '').replace(/\D/g, '');
             const m = (merchant || '').toLowerCase();
-            if (clean.startsWith('6032') || clean.startsWith('6087') || m.includes('mandiri') || m.includes('e-money')) {
+            
+            // Mandiri e-Money
+            if (clean.startsWith('6032') || clean.startsWith('6087') || clean.startsWith('6031') || clean.startsWith('5899') || clean.startsWith('6035') || m.includes('mandiri') || m.includes('e-money') || m.includes('livin')) {
                 return { bank: 'Mandiri', color: 'from-blue-600 via-indigo-700 to-blue-900', label: 'Mandiri e-Money' };
             }
-            if (clean.startsWith('6013') || clean.startsWith('6019') || m.includes('bca') || m.includes('flazz')) {
+            // BCA Flazz
+            if (clean.startsWith('6013') || clean.startsWith('6019') || clean.startsWith('6014') || clean.startsWith('6015') || m.includes('bca') || m.includes('flazz')) {
                 return { bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950', label: 'BCA Flazz' };
             }
-            if (clean.startsWith('6018') || clean.startsWith('5379') || m.includes('bri') || m.includes('brizzi')) {
+            // BRI Brizzi
+            if (clean.startsWith('6018') || clean.startsWith('5379') || clean.startsWith('5221') || m.includes('bri') || m.includes('brizzi')) {
                 return { bank: 'BRI', color: 'from-cyan-600 via-blue-800 to-blue-950', label: 'BRI Brizzi' };
             }
-            if (clean.startsWith('1515') || clean.startsWith('7546') || m.includes('bni') || m.includes('tapcash')) {
+            // BNI TapCash
+            if (clean.startsWith('1515') || clean.startsWith('7546') || clean.startsWith('5401') || m.includes('bni') || m.includes('tapcash')) {
                 return { bank: 'BNI', color: 'from-amber-600 via-orange-700 to-slate-900', label: 'BNI TapCash' };
             }
+            // Bank DKI JakCard
+            if (clean.startsWith('6030') || m.includes('jakcard') || m.includes('dki')) {
+                return { bank: 'Bank DKI', color: 'from-emerald-600 via-teal-700 to-slate-900', label: 'DKI JakCard' };
+            }
+
             return { bank: 'e-Toll', color: 'from-purple-600 via-indigo-700 to-slate-900', label: 'Kartu e-Toll' };
+        }
+
+        function getMerchantBadge(merchant) {
+            const m = (merchant || '').toLowerCase();
+            if (m.includes('mandiri') || m.includes('e-money') || m.includes('livin')) {
+                return { label: merchant || 'Mandiri e-Money', icon: 'fa-building-columns', bg: 'bg-blue-950/80 text-blue-300 border border-blue-800/60' };
+            }
+            if (m.includes('bca') || m.includes('flazz')) {
+                return { label: merchant || 'BCA Flazz', icon: 'fa-credit-card', bg: 'bg-sky-950/80 text-sky-300 border border-sky-800/60' };
+            }
+            if (m.includes('bri') || m.includes('brizzi')) {
+                return { label: merchant || 'BRI Brizzi', icon: 'fa-wallet', bg: 'bg-cyan-950/80 text-cyan-300 border border-cyan-800/60' };
+            }
+            if (m.includes('indomaret') || m.includes('alfamart')) {
+                return { label: merchant || 'Retail Store', icon: 'fa-store', bg: 'bg-amber-950/80 text-amber-300 border border-amber-800/60' };
+            }
+            if (m.includes('tokopedia') || m.includes('shopee') || m.includes('blibli')) {
+                return { label: merchant || 'E-Commerce', icon: 'fa-cart-shopping', bg: 'bg-emerald-950/80 text-emerald-300 border border-emerald-800/60' };
+            }
+            return { label: merchant || 'Gate Tol / Rest Area', icon: 'fa-road', bg: 'bg-slate-900 text-slate-300 border border-slate-700' };
         }
 
         async function callGeminiOCR(base64DataUrl, userApiKey) {
@@ -226,7 +234,7 @@
         const currentYearMonth = new Date().toISOString().substring(0, 7);
 
         function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard }) {
-            const [securityModal, setSecurityModal] = React.useState(null); // { type: 'DELETE_CARD'|'RESET_LOCAL'|'RESET_ALL', payload: any, title: string, desc: string }
+            const [securityModal, setSecurityModal] = React.useState(null);
             const [passwordInput, setPasswordInput] = React.useState('');
             const [passError, setPassError] = React.useState('');
             const [showNewCardInput, setShowNewCardInput] = React.useState(false);
@@ -252,7 +260,6 @@
                     localStorage.removeItem('etoll_transactions');
                     showToastNotification('Database lokal berhasil dibersihkan.', 'info');
                 } else if (type === 'RESET_ALL') {
-                    // Wipe Local
                     setTransactions([]);
                     setCards(INITIAL_CARDS);
                     setMonthlyDeposits({});
@@ -260,7 +267,6 @@
                     localStorage.removeItem('etoll_cards');
                     localStorage.removeItem('etoll_monthly_deposits');
 
-                    // Wipe Cloud Realtime DB
                     if (firebaseProjectId) {
                         try {
                             const targetPid = firebaseProjectId.trim();
@@ -422,7 +428,7 @@
                                 <i className="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i>
                                 <span>Pembersihan & Reset Database (Sensitif)</span>
                             </h3>
-                            <p className="text-xs text-slate-400 mt-0.5">Tindakan ini memerlukan konfirmasi keamanan password administrator.</p>
+                            <p className="text-xs text-slate-400 mt-0.5">Tindakan ini memerlukan konfirmasi keamanan password administrator (anda321).</p>
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -644,6 +650,7 @@
             React.useEffect(() => { localStorage.setItem('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
             React.useEffect(() => { localStorage.setItem('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
 
+            // Auto Card Registration upon new transaction detection
             React.useEffect(() => {
                 if (!transactions || transactions.length === 0) return;
                 
@@ -655,10 +662,12 @@
                         const formattedNum = formatCardNumber(tx.etollNumber);
                         if (!formattedNum) return;
 
-                        const exists = updatedCards.some(c => c.number.replace(/\s+/g, '') === formattedNum.replace(/\s+/g, ''));
+                        const cleanNum = formattedNum.replace(/\D/g, '');
+                        const exists = updatedCards.some(c => (c.number || '').replace(/\D/g, '') === cleanNum);
+                        
                         if (!exists) {
                             const detected = detectBankFromCardNumber(formattedNum, tx.merchant);
-                            const last4 = formattedNum.slice(-4);
+                            const last4 = cleanNum.slice(-4) || '0000';
                             updatedCards.push({
                                 id: 'card-auto-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
                                 label: `${detected.label} (${last4})`,
@@ -693,11 +702,12 @@
             const handleAddCard = (newCardData) => {
                 const formattedNum = formatCardNumber(newCardData.number);
                 if (!formattedNum) return null;
-                const existing = cards.find(c => c.number.replace(/\s+/g, '') === formattedNum.replace(/\s+/g, ''));
+                const cleanNum = formattedNum.replace(/\D/g, '');
+                const existing = cards.find(c => (c.number || '').replace(/\D/g, '') === cleanNum);
                 if (existing) return existing;
 
                 const detected = detectBankFromCardNumber(formattedNum, newCardData.merchant || newCardData.label);
-                const last4 = formattedNum.slice(-4);
+                const last4 = cleanNum.slice(-4) || '0000';
                 const newCard = {
                     id: 'card-' + Date.now(),
                     label: newCardData.label || `${detected.label} (${last4})`,
@@ -712,7 +722,7 @@
 
             const handleSaveTransaction = async (txData) => {
                 let cardNum = formatCardNumber(txData.etollNumber);
-                if (cardNum && !cards.some(c => c.number.replace(/\s+/g, '') === cardNum.replace(/\s+/g, ''))) {
+                if (cardNum && !cards.some(c => (c.number || '').replace(/\D/g, '') === cardNum.replace(/\D/g, ''))) {
                     handleAddCard({ label: txData.merchant || 'Card', number: cardNum });
                 }
 
@@ -860,7 +870,9 @@
             const filteredTransactions = React.useMemo(() => {
                 let result = transactions.filter(t => {
                     const matchesMonth = selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth));
-                    const matchesCard = selectedCardFilter === 'ALL' || t.etollNumber === selectedCardFilter;
+                    const cleanCardFilter = selectedCardFilter !== 'ALL' ? selectedCardFilter.replace(/\D/g, '') : 'ALL';
+                    const cleanTxCard = (t.etollNumber || '').replace(/\D/g, '');
+                    const matchesCard = selectedCardFilter === 'ALL' || cleanTxCard === cleanCardFilter;
                     const matchesSearch = !searchQuery || 
                         (t.merchant && t.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
                         (t.invoiceNumber && t.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -891,7 +903,6 @@
                 }));
             };
 
-            // Financial Calculations
             const monthTotalSpent = React.useMemo(() => {
                 return filteredTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
             }, [filteredTransactions]);
@@ -907,35 +918,36 @@
             const cardBreakdown = React.useMemo(() => {
                 const cardMap = {};
 
-                // Inisialisasi daftar kartu terdaftar
                 cards.forEach(c => {
-                    const cleanNum = (c.number || '').trim();
+                    const formattedNum = formatCardNumber(c.number);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
                     cardMap[cleanNum] = {
                         id: c.id,
                         label: c.label,
                         bank: c.bank,
-                        number: cleanNum,
+                        number: formattedNum,
                         total: 0,
                         count: 0
                     };
                 });
 
-                // Agregasi dari seluruh transaksi sesuai filter bulan
                 filteredTransactions.forEach(t => {
-                    const num = (t.etollNumber || '').trim();
-                    if (num) {
-                        if (!cardMap[num]) {
-                            cardMap[num] = {
-                                id: 'unregistered-' + num,
-                                label: 'Kartu ' + (num.slice(-4) || 'e-Toll'),
-                                bank: 'e-Toll',
-                                number: num,
+                    const formattedNum = formatCardNumber(t.etollNumber);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    if (cleanNum) {
+                        if (!cardMap[cleanNum]) {
+                            const detected = detectBankFromCardNumber(formattedNum, t.merchant);
+                            cardMap[cleanNum] = {
+                                id: 'unregistered-' + cleanNum,
+                                label: `${detected.label} (${cleanNum.slice(-4) || 'e-Toll'})`,
+                                bank: detected.bank,
+                                number: formattedNum,
                                 total: 0,
                                 count: 0
                             };
                         }
-                        cardMap[num].total += Number(t.amount || 0);
-                        cardMap[num].count += 1;
+                        cardMap[cleanNum].total += Number(t.amount || 0);
+                        cardMap[cleanNum].count += 1;
                     }
                 });
 
@@ -949,6 +961,7 @@
 
             return (
                 <div className="min-h-screen flex flex-col relative overflow-hidden">
+                    {}
                     <header className="sticky top-0 z-40 glass-panel border-b border-slate-800 shadow-xl">
                         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -1006,7 +1019,7 @@
                     )}
 
                     <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
-                        {/* DASHBOARD TAB */}
+                        {}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
                                 {/* STAT CARDS GRID */}
@@ -1234,15 +1247,16 @@
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {cards.map(card => {
+                                            const cleanCardNum = (card.number || '').replace(/\D/g, '');
                                             const cardSpent = transactions
-                                                .filter(t => t.etollNumber === card.number && (selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth))))
+                                                .filter(t => (t.etollNumber || '').replace(/\D/g, '') === cleanCardNum && (selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth))))
                                                 .reduce((sum, t) => sum + Number(t.amount || 0), 0);
                                             return (
                                                 <div key={card.id} className={`p-6 rounded-3xl bg-gradient-to-r ${card.color || 'from-blue-600 via-indigo-700 to-slate-900'} text-white shadow-2xl border border-white/10 relative overflow-hidden group hover:scale-[1.01] transition duration-200`}>
                                                     <div className="flex justify-between items-start relative z-10">
                                                         <div>
                                                             <p className="text-[10px] opacity-80 uppercase tracking-widest font-black">{card.bank} • {card.label}</p>
-                                                            <p className="text-xl font-mono font-bold mt-2 tracking-widest text-shadow">{card.number}</p>
+                                                            <p className="text-xl font-mono font-bold mt-2 tracking-widest text-shadow">{formatCardNumber(card.number)}</p>
                                                         </div>
                                                         <i className="fa-solid fa-wifi rotate-90 text-2xl opacity-50 group-hover:opacity-90 transition"></i>
                                                     </div>
@@ -1267,7 +1281,7 @@
                             </div>
                         )}
 
-                        {/* TRANSACTIONS TAB */}
+                        {}
                         {activeTab === 'transactions' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
@@ -1424,9 +1438,9 @@
                                                             </td>
                                                             <td className="py-3.5 px-4 font-mono font-bold text-slate-200 whitespace-nowrap">
                                                                 <div className="flex items-center gap-2">
-                                                                    <span className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">{tx.etollNumber}</span>
+                                                                    <span className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">{formatCardNumber(tx.etollNumber)}</span>
                                                                     <button 
-                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(tx.etollNumber, 'Nomor e-Toll'); }}
+                                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(formatCardNumber(tx.etollNumber), 'Nomor e-Toll'); }}
                                                                         className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-brand-400 transition p-1 hover:bg-slate-700 rounded"
                                                                         title="Salin Nomor Card"
                                                                     >
@@ -1522,19 +1536,12 @@
                                                     <div className="flex justify-between items-center pt-2 border-t border-slate-800">
                                                         <div>
                                                             <p className="text-[10px] text-slate-500 font-semibold">Nomor e-Toll:</p>
-                                                            <p className="font-mono font-bold text-xs text-slate-200">{tx.etollNumber}</p>
+                                                            <p className="font-mono font-bold text-xs text-slate-200">{formatCardNumber(tx.etollNumber)}</p>
                                                         </div>
                                                         <div className="text-right">
                                                             <p className="text-[10px] text-slate-500 font-semibold">Nominal:</p>
                                                             <p className="font-black text-brand-400 text-sm">{formatRupiah(tx.amount)}</p>
                                                         </div>
-                                                    </div>
-
-                                                    <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1">
-                                                        <span className="font-mono text-indigo-300">Inv: {tx.invoiceNumber}</span>
-                                                        <span className="font-bold text-brand-400 flex items-center gap-1">
-                                                            Detail <i className="fa-solid fa-chevron-right text-[9px]"></i>
-                                                        </span>
                                                     </div>
                                                 </div>
                                             );
@@ -1544,7 +1551,7 @@
                             </div>
                         )}
 
-                        {/* MONTHLY RECAP TAB */}
+                        {}
                         {activeTab === 'monthly_recap' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
@@ -1555,24 +1562,24 @@
                                         <p className="text-xs text-slate-400 mt-1">Kelola deposit kasbon operasional dan ekspor rekapitulasi SPJ.</p>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        <button onClick={handleExportExcel} className="bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg border border-emerald-500/30 transition">
+                                        <button onClick={handleExportExcel} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition">
                                             <i className="fa-solid fa-file-excel"></i> Unduh Excel (.xlsx)
                                         </button>
-                                        <button onClick={handleExportCsv} className="bg-cyan-600/80 hover:bg-cyan-600 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg border border-cyan-500/30 transition">
+                                        <button onClick={handleExportCsv} className="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition">
                                             <i className="fa-solid fa-file-csv"></i> Unduh CSV
                                         </button>
-                                        <button onClick={() => setShowSpjPrintModal(true)} className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg border border-brand-400/30 transition">
+                                        <button onClick={() => setShowSpjPrintModal(true)} className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2.5 rounded-xl flex items-center gap-2 shadow-sm transition">
                                             <i className="fa-solid fa-print"></i> Cetak SPJ (PDF)
                                         </button>
                                     </div>
                                 </div>
 
-                                <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-4">
+                                <div className="p-5 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h4 className="font-extrabold text-sm text-brand-300 flex items-center gap-2">
                                             <i className="fa-solid fa-hand-holding-dollar"></i> Deposit Uang Muka Operasional ({selectedMonth})
                                         </h4>
-                                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-slate-800 text-brand-300 border border-slate-700">
+                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-brand-300 border border-slate-700">
                                             Kasbon Diterima
                                         </span>
                                     </div>
@@ -1587,16 +1594,16 @@
                                                 value={monthlyDeposits[selectedMonth] || ''} 
                                                 onChange={(e) => setMonthlyDeposits({ ...monthlyDeposits, [selectedMonth]: Number(e.target.value || 0) })}
                                                 placeholder="Contoh: 1500000"
-                                                className="w-full p-2.5 text-xs font-bold border rounded-xl bg-slate-950 border-slate-700 text-white focus:ring-2 focus:ring-brand-500"
+                                                className="w-full p-2.5 text-xs font-bold border border-slate-700 rounded-xl bg-slate-950 text-white focus:ring-2 focus:ring-brand-500"
                                             />
                                         </div>
 
-                                        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Pengeluaran e-Toll:</span>
                                             <span className="text-base font-black text-rose-400">{formatRupiah(monthTotalSpent)}</span>
                                         </div>
 
-                                        <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                        <div className="p-3 bg-slate-950/80 rounded-xl border border-slate-800">
                                             <span className="text-[10px] font-bold text-slate-400 uppercase block">
                                                 {depositBalance >= 0 ? "Sisa Uang Muka (Dikembalikan):" : "Kurang Bayar (Reimbursement):"}
                                             </span>
@@ -1607,29 +1614,29 @@
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+                                <div className="p-4 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-3">
                                     <h4 className="font-bold text-xs uppercase text-slate-400">Profil Dokumen SPJ</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                                         <div>
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Nama Pemohon</label>
-                                            <input type="text" value={spjProfile.applicantName} onChange={e => setSpjProfile({...spjProfile, applicantName: e.target.value})} className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-950 font-semibold text-white" />
+                                            <input type="text" value={spjProfile.applicantName} onChange={e => setSpjProfile({...spjProfile, applicantName: e.target.value})} className="w-full p-2 border border-slate-700 rounded-lg bg-slate-950 text-white font-semibold" />
                                         </div>
                                         <div>
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Divisi / Unit</label>
-                                            <input type="text" value={spjProfile.division} onChange={e => setSpjProfile({...spjProfile, division: e.target.value})} className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-950 font-semibold text-white" />
+                                            <input type="text" value={spjProfile.division} onChange={e => setSpjProfile({...spjProfile, division: e.target.value})} className="w-full p-2 border border-slate-700 rounded-lg bg-slate-950 text-white font-semibold" />
                                         </div>
                                         <div>
                                             <label className="block text-[10px] text-slate-400 font-bold mb-1">Nopol Kendaraan</label>
-                                            <input type="text" value={spjProfile.vehicleNopol} onChange={e => setSpjProfile({...spjProfile, vehicleNopol: e.target.value})} className="w-full p-2.5 border border-slate-700 rounded-xl bg-slate-950 font-semibold text-white" />
+                                            <input type="text" value={spjProfile.vehicleNopol} onChange={e => setSpjProfile({...spjProfile, vehicleNopol: e.target.value})} className="w-full p-2 border border-slate-700 rounded-lg bg-slate-950 text-white font-semibold" />
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {/* CLOUD CONFIG TAB */}
+                        {}
                         {activeTab === 'cloud_config' && (
-                            <div className="glass-card p-6 rounded-3xl border border-slate-700/70 space-y-5 max-w-3xl mx-auto shadow-xl">
+                            <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5 max-w-3xl mx-auto">
                                 <div className="border-b border-slate-800 pb-3">
                                     <h3 className="font-extrabold text-lg flex items-center gap-2 text-brand-400">
                                         <i className="fa-solid fa-cloud text-sky-400"></i> Integrasi Bot Telegram 24 Jam Nonstop
@@ -1649,7 +1656,7 @@
                                             placeholder="etoll-3366c"
                                             value={tempFbPid}
                                             onChange={(e) => setTempFbPid(e.target.value)}
-                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl font-mono text-xs text-white focus:ring-2 focus:ring-brand-500"
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500 text-white"
                                         />
                                     </div>
 
@@ -1662,7 +1669,7 @@
                                             placeholder="AIzaSy..."
                                             value={geminiApiKey}
                                             onChange={(e) => setGeminiApiKey(e.target.value)}
-                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl font-mono text-xs text-white focus:ring-2 focus:ring-brand-500"
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl font-mono text-xs focus:ring-2 focus:ring-brand-500 text-white"
                                         />
                                     </div>
 
@@ -1670,7 +1677,7 @@
                                         <button 
                                             onClick={handleSaveCloudSettings} 
                                             disabled={isSyncing}
-                                            className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-lg text-xs flex items-center justify-center gap-2 transition"
+                                            className="w-full py-3 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-xl shadow-md text-xs flex items-center justify-center gap-2 transition"
                                         >
                                             {isSyncing ? (
                                                 <>
@@ -1689,7 +1696,7 @@
                             </div>
                         )}
 
-                        {/* MASTER DATA TAB */}
+                        {}
                         {activeTab === 'master_data' && (
                             <MasterDataTab 
                                 cards={cards}
@@ -1705,6 +1712,7 @@
                         )}
                     </main>
 
+                    {}
                     {showScanModal && (
                         <ScanAndAddModal 
                             userApiKey={geminiApiKey}
@@ -1741,7 +1749,7 @@
                                 </div>
 
                                 <div className="space-y-3 text-xs">
-                                    <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-2">
+                                    <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                                         <div className="flex justify-between text-slate-400">
                                             <span>Tanggal:</span>
                                             <span className="font-bold text-white">{inspectingTx.date}</span>
@@ -1752,11 +1760,11 @@
                                         </div>
                                         <div className="flex justify-between text-slate-400">
                                             <span>Nomor Card:</span>
-                                            <span className="font-mono font-bold text-white">{inspectingTx.etollNumber}</span>
+                                            <span className="font-mono font-bold text-slate-200">{formatCardNumber(inspectingTx.etollNumber)}</span>
                                         </div>
                                         <div className="flex justify-between text-slate-400">
                                             <span>No. Invoice / Resi:</span>
-                                            <span className="font-mono font-bold text-brand-400">{inspectingTx.invoiceNumber}</span>
+                                            <span className="font-mono font-bold text-indigo-300">{inspectingTx.invoiceNumber}</span>
                                         </div>
                                         <div className="flex justify-between text-slate-400">
                                             <span>Sumber Penginputan:</span>
@@ -1764,13 +1772,13 @@
                                         </div>
                                     </div>
 
-                                    <div className="p-4 bg-brand-950/60 rounded-2xl border border-brand-800 flex justify-between items-center">
+                                    <div className="p-4 bg-brand-950/60 rounded-2xl border border-brand-800/60 flex justify-between items-center">
                                         <span className="font-bold text-brand-300">Total Nominal:</span>
-                                        <span className="text-xl font-black text-brand-300">{formatRupiah(inspectingTx.amount)}</span>
+                                        <span className="text-xl font-black text-brand-400">{formatRupiah(inspectingTx.amount)}</span>
                                     </div>
                                 </div>
 
-                                <button onClick={() => setInspectingTx(null)} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-xs text-white transition">
+                                <button onClick={() => setInspectingTx(null)} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-xs text-slate-200 transition">
                                     Tutup
                                 </button>
                             </div>
@@ -1779,22 +1787,22 @@
 
                     {deletingTx && (
                         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
-                            <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-4 text-center shadow-2xl border border-slate-700">
-                                <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto text-xl border border-rose-500/30">
+                            <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-4 text-center shadow-xl border border-rose-900/60">
+                                <div className="w-12 h-12 rounded-full bg-rose-950 text-rose-400 border border-rose-800 flex items-center justify-center mx-auto text-xl">
                                     <i className="fa-solid fa-trash-can"></i>
                                 </div>
                                 <div>
                                     <h4 className="font-bold text-base text-white">Hapus Transaksi Ini?</h4>
                                     <p className="text-xs text-slate-400 mt-1">
-                                        Invoice <span className="font-mono font-bold text-slate-200">{deletingTx.invoiceNumber}</span> akan dihapus dari Firebase Cloud & Lokal.
+                                        Invoice <span className="font-mono font-bold text-white">{deletingTx.invoiceNumber}</span> akan dihapus dari Firebase Cloud.
                                     </p>
                                 </div>
                                 <div className="flex gap-2">
                                     <button onClick={() => setDeletingTx(null)} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">
                                         Batal
                                     </button>
-                                    <button onClick={() => handleDeleteTransaction(deletingTx.id)} className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition">
-                                        Hapus
+                                    <button onClick={() => handleDeleteTransaction(deletingTx.id)} className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold">
+                                        Ya, Hapus Permanen
                                     </button>
                                 </div>
                             </div>
@@ -1904,7 +1912,7 @@
                         </div>
 
                         {isQuotaExceeded && (
-                            <div className="p-3 bg-rose-950/80 border border-rose-800 text-rose-300 rounded-xl text-xs space-y-1">
+                            <div className="p-3 bg-rose-950/60 border border-rose-800 text-rose-200 rounded-xl text-xs">
                                 <p className="font-bold flex items-center gap-2">
                                     <i className="fa-solid fa-triangle-exclamation text-rose-400"></i> Batas Kuota Scan Gratis Hari Ini Tercapai ({freeDailyLimit}/{freeDailyLimit})
                                 </p>
@@ -1915,7 +1923,7 @@
                             <div className="border-2 border-dashed border-slate-700 rounded-2xl p-4 text-center bg-slate-950/60">
                                 {selectedImage ? (
                                     <div className="space-y-3">
-                                        <img src={selectedImage} alt="Struk" className="max-h-48 mx-auto rounded-xl shadow-md object-contain" />
+                                        <img src={selectedImage} alt="Struk" className="max-h-48 mx-auto rounded-xl shadow-md object-contain border border-slate-800" />
                                         <button 
                                             type="button" 
                                             onClick={handleRunOcr} 
@@ -1947,32 +1955,38 @@
                             <form onSubmit={handleSubmit} className="space-y-3 pt-2">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400">Nomor e-Toll (16 Digit)</label>
-                                        <input type="text" value={formData.etollNumber} onChange={e => setFormData({...formData, etollNumber: e.target.value})} className="w-full p-2.5 text-xs border border-slate-700 bg-slate-950 text-white rounded-xl font-mono" required />
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor e-Toll (16 Digit)</label>
+                                        <input 
+                                            type="text" 
+                                            value={formData.etollNumber} 
+                                            onChange={e => setFormData({...formData, etollNumber: formatCardNumber(e.target.value)})} 
+                                            className="w-full p-2 text-xs border border-slate-700 rounded-xl font-mono bg-slate-950 text-white" 
+                                            required 
+                                        />
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400">Merchant / Penyedia</label>
-                                        <input type="text" value={formData.merchant} onChange={e => setFormData({...formData, merchant: e.target.value})} className="w-full p-2.5 text-xs border border-slate-700 bg-slate-950 text-white rounded-xl" required />
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Merchant / Penyedia</label>
+                                        <input type="text" value={formData.merchant} onChange={e => setFormData({...formData, merchant: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl bg-slate-950 text-white" required />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400">Nominal (Rp)</label>
-                                        <input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full p-2.5 text-xs border border-slate-700 bg-slate-950 text-white rounded-xl font-bold" required />
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nominal (Rp)</label>
+                                        <input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl font-bold bg-slate-950 text-white" required />
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400">No. Invoice / Resi</label>
-                                        <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({...formData, invoiceNumber: e.target.value})} className="w-full p-2.5 text-xs border border-slate-700 bg-slate-950 text-white rounded-xl font-mono" required />
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">No. Invoice / Resi</label>
+                                        <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({...formData, invoiceNumber: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl font-mono bg-slate-950 text-white" required />
                                     </div>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-slate-400">Tanggal Transaksi</label>
-                                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-2.5 text-xs border border-slate-700 bg-slate-950 text-white rounded-xl" required />
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Tanggal Transaksi</label>
+                                    <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl bg-slate-950 text-white" required />
                                 </div>
 
                                 <div className="flex gap-2 pt-2">
-                                    <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-400 hover:bg-slate-800">Batal</button>
-                                    <button type="submit" className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition">Simpan Transaksi</button>
+                                    <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
+                                    <button type="submit" className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md">Simpan Transaksi</button>
                                 </div>
                             </form>
                         </div>
@@ -1991,8 +2005,9 @@
 
             const cardSpentThisMonth = React.useMemo(() => {
                 if (!scannedCardNum) return 0;
+                const cleanTarget = scannedCardNum.replace(/\D/g, '');
                 return transactions
-                    .filter(t => t.etollNumber === scannedCardNum && t.date && t.date.startsWith(currentMonth))
+                    .filter(t => (t.etollNumber || '').replace(/\D/g, '') === cleanTarget && t.date && t.date.startsWith(currentMonth))
                     .reduce((s, t) => s + Number(t.amount || 0), 0);
             }, [scannedCardNum, transactions, currentMonth]);
 
@@ -2009,20 +2024,20 @@
                         </div>
 
                         <div className="py-6 space-y-3">
-                            <div className="w-20 h-20 rounded-full bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center mx-auto text-3xl animate-pulse">
+                            <div className="w-20 h-20 rounded-full bg-purple-950/60 border border-purple-800/60 text-purple-400 flex items-center justify-center mx-auto text-3xl animate-pulse">
                                 <i className="fa-solid fa-wifi rotate-90"></i>
                             </div>
                             <p className="text-xs text-slate-400 font-medium">
                                 Tempelkan kartu e-Toll ke bagian belakang HP Anda.
                             </p>
 
-                            <button onClick={handleSimulateNfc} className="text-xs bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 px-3.5 py-2 rounded-xl font-bold border border-purple-500/30 transition">
+                            <button onClick={handleSimulateNfc} className="text-xs bg-purple-950/80 text-purple-300 px-3 py-1.5 rounded-lg font-bold border border-purple-800/60 hover:bg-purple-900 transition">
                                 Simulasi Tap NFC (Demo)
                             </button>
                         </div>
 
                         {scannedCardNum && (
-                            <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-left space-y-2">
+                            <div className="p-4 bg-slate-950 rounded-2xl border border-purple-900/60 text-left space-y-2">
                                 <p className="text-[10px] font-bold text-purple-400 uppercase">Kartu NFC Terdeteksi:</p>
                                 <p className="text-base font-mono font-bold text-white">{scannedCardNum}</p>
                                 <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
@@ -2056,7 +2071,6 @@
                         </div>
 
                         <div className="p-4 space-y-6 bg-white text-black font-sans">
-                            {/* Header Kop */}
                             <div className="border-b-2 border-slate-800 pb-3 flex justify-between items-end">
                                 <div>
                                     <h2 className="font-black text-xl uppercase tracking-wider">{spjProfile.companyName || 'PT NUSANTARA TRANS'}</h2>
@@ -2068,7 +2082,6 @@
                                 </div>
                             </div>
 
-                            {/* Metadata & Cash Advance Summary */}
                             <div className="grid grid-cols-2 gap-4 text-xs">
                                 <div>
                                     <p><span className="font-bold">Nama Pemohon:</span> {spjProfile.applicantName}</p>
@@ -2085,7 +2098,6 @@
                                 </div>
                             </div>
 
-                            {/* Transactions Table */}
                             <table className="w-full text-left text-xs border-collapse border border-slate-300">
                                 <thead>
                                     <tr className="bg-slate-100 border-b border-slate-300">
@@ -2103,7 +2115,7 @@
                                             <td className="p-2 border text-center">{idx + 1}</td>
                                             <td className="p-2 border">{t.date}</td>
                                             <td className="p-2 border font-bold">{t.merchant}</td>
-                                            <td className="p-2 border font-mono">{t.etollNumber}</td>
+                                            <td className="p-2 border font-mono">{formatCardNumber(t.etollNumber)}</td>
                                             <td className="p-2 border font-mono">{t.invoiceNumber}</td>
                                             <td className="p-2 border text-right font-bold">{Number(t.amount).toLocaleString('id-ID')}</td>
                                         </tr>
@@ -2117,7 +2129,6 @@
 
                             <p className="text-xs italic font-semibold">Terbilang Realisasi: {terbilangRupiah(totalAmount)}</p>
 
-                            {/* Signatures */}
                             <div className="grid grid-cols-3 gap-4 text-center text-xs pt-8">
                                 <div>
                                     <p>Pemohon / Driver</p>
