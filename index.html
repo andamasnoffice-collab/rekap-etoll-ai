@@ -225,6 +225,317 @@
 
         const currentYearMonth = new Date().toISOString().substring(0, 7);
 
+        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard }) {
+            const [securityModal, setSecurityModal] = React.useState(null); // { type: 'DELETE_CARD'|'RESET_LOCAL'|'RESET_ALL', payload: any, title: string, desc: string }
+            const [passwordInput, setPasswordInput] = React.useState('');
+            const [passError, setPassError] = React.useState('');
+            const [showNewCardInput, setShowNewCardInput] = React.useState(false);
+            const [newCardData, setNewCardData] = React.useState({ label: '', number: '', bank: 'Mandiri' });
+
+            const REQUIRED_PASSWORD = 'anda321';
+
+            const handleConfirmAction = async () => {
+                if (passwordInput !== REQUIRED_PASSWORD) {
+                    setPassError('Password konfirmasi salah! Harap periksa kembali.');
+                    return;
+                }
+
+                if (!securityModal) return;
+
+                const { type, payload } = securityModal;
+
+                if (type === 'DELETE_CARD') {
+                    setCards(prev => prev.filter(c => c.id !== payload.id));
+                    showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
+                } else if (type === 'RESET_LOCAL') {
+                    setTransactions([]);
+                    localStorage.removeItem('etoll_transactions');
+                    showToastNotification('Database lokal berhasil dibersihkan.', 'info');
+                } else if (type === 'RESET_ALL') {
+                    // Wipe Local
+                    setTransactions([]);
+                    setCards(INITIAL_CARDS);
+                    setMonthlyDeposits({});
+                    localStorage.removeItem('etoll_transactions');
+                    localStorage.removeItem('etoll_cards');
+                    localStorage.removeItem('etoll_monthly_deposits');
+
+                    // Wipe Cloud Realtime DB
+                    if (firebaseProjectId) {
+                        try {
+                            const targetPid = firebaseProjectId.trim();
+                            const dbUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions.json`;
+                            await fetch(dbUrl, { method: 'DELETE' });
+                            showToastNotification('Seluruh database Cloud & Lokal berhasil dihapus permanen!', 'info');
+                            fetchCloudData();
+                        } catch (e) {
+                            showToastNotification('Lokal terhapus, gagal menghapus Cloud Firebase.', 'error');
+                        }
+                    } else {
+                        showToastNotification('Seluruh data lokal berhasil dibersihkan.', 'info');
+                    }
+                }
+
+                setSecurityModal(null);
+                setPasswordInput('');
+                setPassError('');
+            };
+
+            const handleCreateCardManual = (e) => {
+                e.preventDefault();
+                if (!newCardData.number || newCardData.number.replace(/\D/g, '').length < 16) {
+                    showToastNotification('Nomor kartu harus 16 digit.', 'error');
+                    return;
+                }
+                handleAddCard(newCardData);
+                setNewCardData({ label: '', number: '', bank: 'Mandiri' });
+                setShowNewCardInput(false);
+            };
+
+            return (
+                <div className="space-y-6 max-w-5xl mx-auto">
+                    {/* MASTER KARTU E-TOLL */}
+                    <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800">
+                            <div>
+                                <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                                    <i className="fa-solid fa-id-card text-brand-400"></i>
+                                    <span>Master Kelola Kartu e-Toll</span>
+                                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold border border-slate-700">
+                                        {cards.length} Kartu Terdaftar
+                                    </span>
+                                </h3>
+                                <p className="text-xs text-slate-400 mt-0.5">Tambah atau hapus master kartu terdaftar dalam sistem.</p>
+                            </div>
+                            <button 
+                                onClick={() => setShowNewCardInput(!showNewCardInput)}
+                                className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-md transition"
+                            >
+                                <i className={`fa-solid ${showNewCardInput ? 'fa-xmark' : 'fa-plus'}`}></i>
+                                <span>{showNewCardInput ? 'Batal' : 'Tambah Kartu Manual'}</span>
+                            </button>
+                        </div>
+
+                        {showNewCardInput && (
+                            <form onSubmit={handleCreateCardManual} className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
+                                <h4 className="text-xs font-bold text-brand-300 uppercase tracking-wider">Tambah Kartu Baru</h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Label / Nama Kartu</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Contoh: Flazz Tim Lapangan" 
+                                            value={newCardData.label} 
+                                            onChange={e => setNewCardData({...newCardData, label: e.target.value})}
+                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor Kartu (16 Digit)</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="6013 1234 5678 9012" 
+                                            value={newCardData.number} 
+                                            onChange={e => setNewCardData({...newCardData, number: formatCardNumber(e.target.value)})}
+                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Bank / Penerbit</label>
+                                        <select 
+                                            value={newCardData.bank} 
+                                            onChange={e => setNewCardData({...newCardData, bank: e.target.value})}
+                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold"
+                                        >
+                                            <option value="Mandiri">Mandiri e-Money</option>
+                                            <option value="BCA">BCA Flazz</option>
+                                            <option value="BRI">BRI Brizzi</option>
+                                            <option value="BNI">BNI TapCash</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end pt-1">
+                                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
+                                        Simpan Kartu
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800">
+                            <table className="w-full text-left text-xs border-collapse">
+                                <thead>
+                                    <tr className="bg-slate-900/90 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
+                                        <th className="py-3.5 px-4">Kartu & Label</th>
+                                        <th className="py-3.5 px-4">Nomor e-Toll</th>
+                                        <th className="py-3.5 px-4">Bank</th>
+                                        <th className="py-3.5 px-4 text-center">Aksi Master</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/80 font-medium">
+                                    {cards.map(card => (
+                                        <tr key={card.id} className="hover:bg-slate-800/50 transition">
+                                            <td className="py-3 px-4 font-bold text-white">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-xs">
+                                                        <i className="fa-solid fa-credit-card"></i>
+                                                    </div>
+                                                    <span>{card.label}</span>
+                                                </div>
+                                            </td>
+                                            <td className="py-3 px-4 font-mono font-bold text-slate-200">
+                                                {card.number}
+                                            </td>
+                                            <td className="py-3 px-4 text-slate-300 font-semibold">
+                                                {card.bank}
+                                            </td>
+                                            <td className="py-3 px-4 text-center">
+                                                <button 
+                                                    onClick={() => {
+                                                        setPasswordInput('');
+                                                        setPassError('');
+                                                        setSecurityModal({
+                                                            type: 'DELETE_CARD',
+                                                            payload: card,
+                                                            title: `Hapus Kartu (${card.label})`,
+                                                            desc: `Anda akan menghapus kartu ${card.number} dari Master Kartu Terdaftar.`
+                                                        });
+                                                    }}
+                                                    className="px-3 py-1 bg-rose-950/60 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-800/60 rounded-xl font-bold transition flex items-center gap-1.5 mx-auto text-[11px]"
+                                                >
+                                                    <i className="fa-solid fa-trash-can"></i> Hapus Kartu
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* DANGER ZONE / RESET DATABASE */}
+                    <div className="glass-card p-6 rounded-3xl border border-rose-900/40 shadow-xl space-y-4">
+                        <div className="border-b border-rose-900/40 pb-3">
+                            <h3 className="font-extrabold text-base text-rose-400 flex items-center gap-2">
+                                <i className="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i>
+                                <span>Pembersihan & Reset Database (Sensitif)</span>
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-0.5">Tindakan ini memerlukan konfirmasi keamanan password administrator.</p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+                                <div className="flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase">
+                                    <i className="fa-solid fa-broom"></i> Reset Cache & Lokal Browser
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    Menghapus seluruh riwayat transaksi e-Toll dari penyimpanan lokal browser ini tanpa menghapus data di Firebase Cloud.
+                                </p>
+                                <button 
+                                    onClick={() => {
+                                        setPasswordInput('');
+                                        setPassError('');
+                                        setSecurityModal({
+                                            type: 'RESET_LOCAL',
+                                            payload: null,
+                                            title: 'Reset Storage Lokal',
+                                            desc: 'Apakah Anda yakin ingin menghapus seluruh data transaksi lokal di browser ini?'
+                                        });
+                                    }}
+                                    className="w-full py-2.5 bg-amber-600/80 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-md transition"
+                                >
+                                    Reset Data Lokal
+                                </button>
+                            </div>
+
+                            <div className="p-5 bg-rose-950/30 rounded-2xl border border-rose-900/60 space-y-3">
+                                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs uppercase">
+                                    <i className="fa-solid fa-radiation"></i> Reset Total Database (Lokal & Cloud)
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    Menghapus seluruh transaksi secara permanen dari Firebase Realtime Database dan penyimpanan lokal. Data tidak dapat dikembalikan!
+                                </p>
+                                <button 
+                                    onClick={() => {
+                                        setPasswordInput('');
+                                        setPassError('');
+                                        setSecurityModal({
+                                            type: 'RESET_ALL',
+                                            payload: null,
+                                            title: 'Reset TOTAL Database Cloud & Lokal',
+                                            desc: 'PERINGATAN! Tindakan ini akan mengosongkan seluruh isi database Firebase Cloud dan Penyimpanan Lokal.'
+                                        });
+                                    }}
+                                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-lg transition"
+                                >
+                                    Hapus Seluruh Database
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* SECURITY PASSWORD CONFIRMATION MODAL */}
+                    {securityModal && (
+                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
+                            <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-rose-800/80">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                                    <h3 className="font-extrabold text-base flex items-center gap-2 text-rose-400">
+                                        <i className="fa-solid fa-shield-halved"></i> Konfirmasi Keamanan Password
+                                    </h3>
+                                    <button onClick={() => setSecurityModal(null)} className="text-slate-400 hover:text-white text-lg">
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-3 text-xs">
+                                    <div className="p-3 bg-rose-950/60 rounded-2xl border border-rose-800/60 text-rose-200">
+                                        <p className="font-bold text-sm text-white mb-1">{securityModal.title}</p>
+                                        <p>{securityModal.desc}</p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                                            Masukkan Password Administrator:
+                                        </label>
+                                        <input 
+                                            type="password"
+                                            placeholder="Masukkan password konfirmasi..."
+                                            value={passwordInput}
+                                            onChange={e => { setPasswordInput(e.target.value); setPassError(''); }}
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
+                                            autoFocus
+                                        />
+                                        {passError && (
+                                            <p className="text-rose-400 text-[11px] font-bold mt-1 flex items-center gap-1">
+                                                <i className="fa-solid fa-circle-exclamation"></i> {passError}
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                    <button 
+                                        onClick={() => setSecurityModal(null)} 
+                                        className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button 
+                                        onClick={handleConfirmAction} 
+                                        className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                                    >
+                                        Konfirmasi & Eksekusi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
         function App() {
             const [cards, setCards] = React.useState(() => JSON.parse(localStorage.getItem('etoll_cards')) || INITIAL_CARDS);
             const [transactions, setTransactions] = React.useState(() => JSON.parse(localStorage.getItem('etoll_transactions')) || INITIAL_DUMMY_TXS);
@@ -638,7 +949,6 @@
 
             return (
                 <div className="min-h-screen flex flex-col relative overflow-hidden">
-                    {}
                     <header className="sticky top-0 z-40 glass-panel border-b border-slate-800 shadow-xl">
                         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -696,7 +1006,7 @@
                     )}
 
                     <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
-                        {}
+                        {/* DASHBOARD TAB */}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
                                 {/* STAT CARDS GRID */}
@@ -799,7 +1109,7 @@
                                         </div>
                                     ) : (
                                         <div className="space-y-6">
-                                            {/* TOTAL TOP UP PER KARTU (BULAN BERJALAN) - DILETAKKAN DI ATAS */}
+                                            {/* TOTAL TOP UP PER KARTU (BULAN BERJALAN) */}
                                             <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800/90 space-y-4">
                                                 <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-800 pb-3">
                                                     <div className="flex items-center gap-2">
@@ -808,7 +1118,7 @@
                                                         </div>
                                                         <div>
                                                             <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">
-                                                                Total Top Up Per Kartu, Per Bulan Berjalan
+                                                                Total Top Up Per Kartu, Per Bulan Berjalan (Urutan Terbanyak)
                                                             </h4>
                                                             <p className="text-[10px] text-slate-400">Periode: {selectedMonth === 'ALL' ? 'Semua Periode' : selectedMonth}</p>
                                                         </div>
@@ -861,7 +1171,7 @@
                                                 </div>
                                             </div>
 
-                                            {/* BREAKDOWN TABLE (DILETAKKAN DI BAWAH) */}
+                                            {/* BREAKDOWN TABLE */}
                                             <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800 shadow-lg">
                                                 <table className="w-full text-left text-xs border-collapse">
                                                     <thead>
@@ -948,7 +1258,6 @@
                                                             Lihat Transaksi
                                                         </button>
                                                     </div>
-                                                    {/* Card background sheen */}
                                                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-2xl group-hover:scale-150 transition"></div>
                                                 </div>
                                             );
@@ -958,10 +1267,9 @@
                             </div>
                         )}
 
-                        {}
+                        {/* TRANSACTIONS TAB */}
                         {activeTab === 'transactions' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5">
-                                {/* TOP BAR FILTER & HEADER */}
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-brand-500/20 border border-brand-400/30">
@@ -1002,7 +1310,6 @@
                                     </div>
                                 </div>
 
-                                {/* TABLE STATS MINI CARDS */}
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                                     <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center gap-3">
                                         <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
@@ -1042,7 +1349,6 @@
                                     </div>
                                 </div>
 
-                                {/* DESKTOP INTERACTIVE TABLE */}
                                 <div className="hidden sm:block overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800 shadow-xl">
                                     <table className="w-full text-left text-xs border-collapse">
                                         <thead>
@@ -1104,23 +1410,18 @@
                                                             className="hover:bg-slate-800/70 transition group cursor-pointer border-l-4 border-transparent hover:border-brand-500"
                                                             onClick={() => setInspectingTx(tx)}
                                                         >
-                                                            {/* Tanggal */}
                                                             <td className="py-3.5 px-4 whitespace-nowrap text-slate-300 font-bold">
                                                                 <div className="flex items-center gap-2">
                                                                     <i className="fa-regular fa-calendar-check text-slate-500 group-hover:text-brand-400 transition"></i>
                                                                     <span>{tx.date}</span>
                                                                 </div>
                                                             </td>
-
-                                                            {/* Merchant Badge */}
                                                             <td className="py-3.5 px-4">
                                                                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-[11px] font-extrabold ${badge.bg}`}>
                                                                     <i className={`fa-solid ${badge.icon}`}></i>
                                                                     <span>{badge.label}</span>
                                                                 </span>
                                                             </td>
-
-                                                            {/* Nomor e-Toll */}
                                                             <td className="py-3.5 px-4 font-mono font-bold text-slate-200 whitespace-nowrap">
                                                                 <div className="flex items-center gap-2">
                                                                     <span className="bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-700">{tx.etollNumber}</span>
@@ -1133,8 +1434,6 @@
                                                                     </button>
                                                                 </div>
                                                             </td>
-
-                                                            {/* No. Invoice */}
                                                             <td className="py-3.5 px-4 font-mono text-slate-300 whitespace-nowrap">
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="px-2.5 py-0.5 rounded-lg bg-indigo-950/70 font-bold border border-indigo-800/60 text-indigo-300 text-[11px]">
@@ -1149,21 +1448,15 @@
                                                                     </button>
                                                                 </div>
                                                             </td>
-
-                                                            {/* Sumber Data Badge */}
                                                             <td className="py-3.5 px-4 whitespace-nowrap">
                                                                 <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${isTelegram ? 'bg-sky-950 text-sky-300 border border-sky-800/50' : 'bg-purple-950 text-purple-300 border border-purple-800/50'}`}>
                                                                     <i className={isTelegram ? "fa-paper-plane text-sky-400" : "fa-camera text-purple-400"}></i>
                                                                     <span>{isTelegram ? 'Telegram Bot' : 'Web Scan'}</span>
                                                                 </span>
                                                             </td>
-
-                                                            {/* Nominal Rupiah */}
                                                             <td className="py-3.5 px-4 text-right font-black text-brand-300 text-sm whitespace-nowrap">
                                                                 {formatRupiah(tx.amount)}
                                                             </td>
-
-                                                            {/* Action Buttons */}
                                                             <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
                                                                 <div className="flex items-center justify-center gap-1">
                                                                     <button 
@@ -1187,8 +1480,6 @@
                                                 })
                                             )}
                                         </tbody>
-
-                                        {/* TABLE FOOTER SUMMARY */}
                                         {filteredTransactions.length > 0 && (
                                             <tfoot>
                                                 <tr className="bg-slate-900/90 font-black border-t-2 border-slate-700 text-slate-100">
@@ -1205,7 +1496,6 @@
                                     </table>
                                 </div>
 
-                                {/* MOBILE CARD-BASED TABLE VIEW */}
                                 <div className="block sm:hidden space-y-3">
                                     {filteredTransactions.length === 0 ? (
                                         <div className="p-8 text-center bg-slate-900 rounded-2xl border border-slate-800 space-y-2">
@@ -1254,7 +1544,7 @@
                             </div>
                         )}
 
-                        {}
+                        {/* MONTHLY RECAP TAB */}
                         {activeTab === 'monthly_recap' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
@@ -1337,7 +1627,7 @@
                             </div>
                         )}
 
-                        {}
+                        {/* CLOUD CONFIG TAB */}
                         {activeTab === 'cloud_config' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 space-y-5 max-w-3xl mx-auto shadow-xl">
                                 <div className="border-b border-slate-800 pb-3">
@@ -1415,7 +1705,6 @@
                         )}
                     </main>
 
-                    {}
                     {showScanModal && (
                         <ScanAndAddModal 
                             userApiKey={geminiApiKey}
@@ -1848,318 +2137,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            );
-        }
-
-        /* MASTER DATA & SECURITY MANAGED TAB */
-        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard }) {
-            const [securityModal, setSecurityModal] = React.useState(null); // { type: 'DELETE_CARD'|'RESET_LOCAL'|'RESET_ALL', payload: any, title: string, desc: string }
-            const [passwordInput, setPasswordInput] = React.useState('');
-            const [passError, setPassError] = React.useState('');
-            const [showNewCardInput, setShowNewCardInput] = React.useState(false);
-            const [newCardData, setNewCardData] = React.useState({ label: '', number: '', bank: 'Mandiri' });
-
-            const REQUIRED_PASSWORD = 'anda321';
-
-            const handleConfirmAction = async () => {
-                if (passwordInput !== REQUIRED_PASSWORD) {
-                    setPassError('Password konfirmasi salah! Harap periksa kembali.');
-                    return;
-                }
-
-                if (!securityModal) return;
-
-                const { type, payload } = securityModal;
-
-                if (type === 'DELETE_CARD') {
-                    setCards(prev => prev.filter(c => c.id !== payload.id));
-                    showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
-                } else if (type === 'RESET_LOCAL') {
-                    setTransactions([]);
-                    localStorage.removeItem('etoll_transactions');
-                    showToastNotification('Database lokal berhasil dibersihkan.', 'info');
-                } else if (type === 'RESET_ALL') {
-                    // Wipe Local
-                    setTransactions([]);
-                    setCards(INITIAL_CARDS);
-                    setMonthlyDeposits({});
-                    localStorage.removeItem('etoll_transactions');
-                    localStorage.removeItem('etoll_cards');
-                    localStorage.removeItem('etoll_monthly_deposits');
-
-                    // Wipe Cloud Realtime DB
-                    if (firebaseProjectId) {
-                        try {
-                            const targetPid = firebaseProjectId.trim();
-                            const dbUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions.json`;
-                            await fetch(dbUrl, { method: 'DELETE' });
-                            showToastNotification('Seluruh database Cloud & Lokal berhasil dihapus permanen!', 'info');
-                            fetchCloudData();
-                        } catch (e) {
-                            showToastNotification('Lokal terhapus, gagal menghapus Cloud Firebase.', 'error');
-                        }
-                    } else {
-                        showToastNotification('Seluruh data lokal berhasil dibersihkan.', 'info');
-                    }
-                }
-
-                setSecurityModal(null);
-                setPasswordInput('');
-                setPassError('');
-            };
-
-            const handleCreateCardManual = (e) => {
-                e.preventDefault();
-                if (!newCardData.number || newCardData.number.replace(/\D/g, '').length < 16) {
-                    showToastNotification('Nomor kartu harus 16 digit.', 'error');
-                    return;
-                }
-                handleAddCard(newCardData);
-                setNewCardData({ label: '', number: '', bank: 'Mandiri' });
-                setShowNewCardInput(false);
-            };
-
-            return (
-                <div className="space-y-6 max-w-5xl mx-auto">
-                    {/* MASTER KARTU E-TOLL */}
-                    <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-4">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800">
-                            <div>
-                                <h3 className="font-extrabold text-base text-white flex items-center gap-2">
-                                    <i className="fa-solid fa-id-card text-brand-400"></i>
-                                    <span>Master Kelola Kartu e-Toll</span>
-                                    <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold border border-slate-700">
-                                        {cards.length} Kartu Terdaftar
-                                    </span>
-                                </h3>
-                                <p className="text-xs text-slate-400 mt-0.5">Tambah atau hapus master kartu terdaftar dalam sistem.</p>
-                            </div>
-                            <button 
-                                onClick={() => setShowNewCardInput(!showNewCardInput)}
-                                className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-2 shadow-md transition"
-                            >
-                                <i className={`fa-solid ${showNewCardInput ? 'fa-xmark' : 'fa-plus'}`}></i>
-                                <span>{showNewCardInput ? 'Batal' : 'Tambah Kartu Manual'}</span>
-                            </button>
-                        </div>
-
-                        {showNewCardInput && (
-                            <form onSubmit={handleCreateCardManual} className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
-                                <h4 className="text-xs font-bold text-brand-300 uppercase tracking-wider">Tambah Kartu Baru</h4>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Label / Nama Kartu</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Contoh: Flazz Tim Lapangan" 
-                                            value={newCardData.label} 
-                                            onChange={e => setNewCardData({...newCardData, label: e.target.value})}
-                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor Kartu (16 Digit)</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="6013 1234 5678 9012" 
-                                            value={newCardData.number} 
-                                            onChange={e => setNewCardData({...newCardData, number: formatCardNumber(e.target.value)})}
-                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white"
-                                            required
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Bank / Penerbit</label>
-                                        <select 
-                                            value={newCardData.bank} 
-                                            onChange={e => setNewCardData({...newCardData, bank: e.target.value})}
-                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-bold"
-                                        >
-                                            <option value="Mandiri">Mandiri e-Money</option>
-                                            <option value="BCA">BCA Flazz</option>
-                                            <option value="BRI">BRI Brizzi</option>
-                                            <option value="BNI">BNI TapCash</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div className="flex justify-end pt-1">
-                                    <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition">
-                                        Simpan Kartu
-                                    </button>
-                                </div>
-                            </form>
-                        )}
-
-                        <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800">
-                            <table className="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr className="bg-slate-900/90 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
-                                        <th className="py-3.5 px-4">Kartu & Label</th>
-                                        <th className="py-3.5 px-4">Nomor e-Toll</th>
-                                        <th className="py-3.5 px-4">Bank</th>
-                                        <th className="py-3.5 px-4 text-center">Aksi Master</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800/80 font-medium">
-                                    {cards.map(card => (
-                                        <tr key={card.id} className="hover:bg-slate-800/50 transition">
-                                            <td className="py-3 px-4 font-bold text-white">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-xs">
-                                                        <i className="fa-solid fa-credit-card"></i>
-                                                    </div>
-                                                    <span>{card.label}</span>
-                                                </div>
-                                            </td>
-                                            <td className="py-3 px-4 font-mono font-bold text-slate-200">
-                                                {card.number}
-                                            </td>
-                                            <td className="py-3 px-4 text-slate-300 font-semibold">
-                                                {card.bank}
-                                            </td>
-                                            <td className="py-3 px-4 text-center">
-                                                <button 
-                                                    onClick={() => {
-                                                        setPasswordInput('');
-                                                        setPassError('');
-                                                        setSecurityModal({
-                                                            type: 'DELETE_CARD',
-                                                            payload: card,
-                                                            title: `Hapus Kartu (${card.label})`,
-                                                            desc: `Anda akan menghapus kartu ${card.number} dari Master Kartu Terdaftar.`
-                                                        });
-                                                    }}
-                                                    className="px-3 py-1 bg-rose-950/60 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-800/60 rounded-xl font-bold transition flex items-center gap-1.5 mx-auto text-[11px]"
-                                                >
-                                                    <i className="fa-solid fa-trash-can"></i> Hapus Kartu
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    {/* DANGER ZONE / RESET DATABASE */}
-                    <div className="glass-card p-6 rounded-3xl border border-rose-900/40 shadow-xl space-y-4">
-                        <div className="border-b border-rose-900/40 pb-3">
-                            <h3 className="font-extrabold text-base text-rose-400 flex items-center gap-2">
-                                <i className="fa-solid fa-triangle-exclamation text-rose-500 animate-pulse"></i>
-                                <span>Pembersihan & Reset Database (Sensitif)</span>
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-0.5">Tindakan ini memerlukan konfirmasi keamanan password administrator.</p>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
-                                <div className="flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase">
-                                    <i className="fa-solid fa-broom"></i> Reset Cache & Lokal Browser
-                                </div>
-                                <p className="text-xs text-slate-400">
-                                    Menghapus seluruh riwayat transaksi e-Toll dari penyimpanan lokal browser ini tanpa menghapus data di Firebase Cloud.
-                                </p>
-                                <button 
-                                    onClick={() => {
-                                        setPasswordInput('');
-                                        setPassError('');
-                                        setSecurityModal({
-                                            type: 'RESET_LOCAL',
-                                            payload: null,
-                                            title: 'Reset Storage Lokal',
-                                            desc: 'Apakah Anda yakin ingin menghapus seluruh data transaksi lokal di browser ini?'
-                                        });
-                                    }}
-                                    className="w-full py-2.5 bg-amber-600/80 hover:bg-amber-600 text-white font-bold rounded-xl text-xs shadow-md transition"
-                                >
-                                    Reset Data Lokal
-                                </button>
-                            </div>
-
-                            <div className="p-5 bg-rose-950/30 rounded-2xl border border-rose-900/60 space-y-3">
-                                <div className="flex items-center gap-2 text-rose-400 font-extrabold text-xs uppercase">
-                                    <i className="fa-solid fa-radiation"></i> Reset Total Database (Lokal & Cloud)
-                                </div>
-                                <p className="text-xs text-slate-400">
-                                    Menghapus seluruh transaksi secara permanen dari Firebase Realtime Database dan penyimpanan lokal. Data tidak dapat dikembalikan!
-                                </p>
-                                <button 
-                                    onClick={() => {
-                                        setPasswordInput('');
-                                        setPassError('');
-                                        setSecurityModal({
-                                            type: 'RESET_ALL',
-                                            payload: null,
-                                            title: 'Reset TOTAL Database Cloud & Lokal',
-                                            desc: 'PERINGATAN! Tindakan ini akan mengosongkan seluruh isi database Firebase Cloud dan Penyimpanan Lokal.'
-                                        });
-                                    }}
-                                    className="w-full py-2.5 bg-rose-600 hover:bg-rose-500 text-white font-bold rounded-xl text-xs shadow-lg transition"
-                                >
-                                    Hapus Seluruh Database
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* SECURITY PASSWORD CONFIRMATION MODAL */}
-                    {securityModal && (
-                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
-                            <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-rose-800/80">
-                                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
-                                    <h3 className="font-extrabold text-base flex items-center gap-2 text-rose-400">
-                                        <i className="fa-solid fa-shield-halved"></i> Konfirmasi Keamanan Password
-                                    </h3>
-                                    <button onClick={() => setSecurityModal(null)} className="text-slate-400 hover:text-white text-lg">
-                                        <i className="fa-solid fa-xmark"></i>
-                                    </button>
-                                </div>
-
-                                <div className="space-y-3 text-xs">
-                                    <div className="p-3 bg-rose-950/60 rounded-2xl border border-rose-800/60 text-rose-200">
-                                        <p className="font-bold text-sm text-white mb-1">{securityModal.title}</p>
-                                        <p>{securityModal.desc}</p>
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                                            Masukkan Password Administrator:
-                                        </label>
-                                        <input 
-                                            type="password"
-                                            placeholder="Masukkan password konfirmasi..."
-                                            value={passwordInput}
-                                            onChange={e => { setPasswordInput(e.target.value); setPassError(''); }}
-                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
-                                            autoFocus
-                                        />
-                                        {passError && (
-                                            <p className="text-rose-400 text-[11px] font-bold mt-1 flex items-center gap-1">
-                                                <i className="fa-solid fa-circle-exclamation"></i> {passError}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-2 pt-2">
-                                    <button 
-                                        onClick={() => setSecurityModal(null)} 
-                                        className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800"
-                                    >
-                                        Batal
-                                    </button>
-                                    <button 
-                                        onClick={handleConfirmAction} 
-                                        className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
-                                    >
-                                        Konfirmasi & Eksekusi
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
