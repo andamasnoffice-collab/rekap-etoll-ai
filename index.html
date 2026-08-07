@@ -1,1285 +1,436 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>System Rekap E-Toll & Bot Telegram AI</title>
-  
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  
-  <!-- Lucide Icons CDN -->
-  <script src="https://unpkg.com/lucide@latest"></script>
-  
-  <!-- Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <!-- Inter Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  
-  <style>
-    body {
-      font-family: 'Inter', sans-serif;
-    }
-    .font-mono {
-      font-family: 'JetBrains+Mono', monospace;
-    }
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #0f172a;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #334155;
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #475569;
-    }
-    /* Hide scrollbar for clean horizontal tab swipe on mobile */
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
-    .no-scrollbar {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
-    }
-  </style>
-</head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RekapToll - Rekapitulasi e-Toll OCR & Anti Duplikat (Cloud Synced)</title>
 
-<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-blue-600 selection:text-white">
-
-  <header class="border-b border-slate-800 bg-slate-900/95 backdrop-blur sticky top-0 z-40">
-    <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 py-2.5 sm:py-0 flex flex-col md:flex-row md:items-center justify-between gap-3">
-      <div class="flex items-center gap-2.5 sm:gap-3">
-        <div class="p-2 sm:p-2.5 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-xl shadow-lg shadow-blue-500/20 text-white flex items-center justify-center shrink-0">
-          <i data-lucide="credit-card" class="w-5 h-5 sm:w-6 sm:h-6"></i>
-        </div>
-        <div>
-          <h1 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-            E-Toll AutoRekap AI
-            <span class="text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
-              Bot Telegram + NFC
-            </span>
-          </h1>
-          <p class="text-xs text-slate-400 hidden sm:block">Sistem Otomatis Rekap Pembelian Saldo E-Toll via OCR Bot Telegram & Scan NFC</p>
-        </div>
-      </div>
-
-      <!-- Navigation Tabs: Horizontal Scroll on Mobile, Full Row on Desktop -->
-      <nav class="flex items-center gap-1 bg-slate-800/90 p-1 rounded-xl border border-slate-700/60 text-xs font-medium overflow-x-auto no-scrollbar w-full md:w-auto">
-        <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="tab-btn flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all bg-blue-600 text-white shadow-md whitespace-nowrap shrink-0">
-          <i data-lucide="trending-up" class="w-3.5 h-3.5"></i>
-          <span>Rekap Bulanan</span>
-        </button>
-
-        <button onclick="switchTab('telegram')" id="tab-btn-telegram" class="tab-btn flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-700/50 whitespace-nowrap shrink-0 relative">
-          <i data-lucide="bot" class="w-3.5 h-3.5"></i>
-          <span>Bot Telegram AI</span>
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        </button>
-
-        <button onclick="switchTab('nfc')" id="tab-btn-nfc" class="tab-btn flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-700/50 whitespace-nowrap shrink-0">
-          <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
-          <span>Scan NFC Kartu</span>
-        </button>
-
-        <button onclick="switchTab('records')" id="tab-btn-records" class="tab-btn flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all text-slate-400 hover:text-white hover:bg-slate-700/50 whitespace-nowrap shrink-0">
-          <i data-lucide="file-spreadsheet" class="w-3.5 h-3.5"></i>
-          <span>Semua Transaksi</span>
-        </button>
-      </nav>
-    </div>
-  </header>
-
-  <!-- Main Container -->
-  <main class="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-4 sm:py-6">
-
-    <!-- TAB 1: DASHBOARD -->
-    <section id="tab-dashboard" class="tab-content space-y-6">
-      <!-- Filter & Action Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 bg-slate-800/40 p-3.5 sm:p-4 rounded-2xl border border-slate-700/50">
-        <div class="flex items-center gap-2.5 sm:gap-3 justify-between sm:justify-start">
-          <div class="flex items-center gap-2">
-            <i data-lucide="calendar" class="w-4 h-4 sm:w-5 sm:h-5 text-blue-400"></i>
-            <span class="text-xs sm:text-sm font-medium text-slate-300">Pilih Bulan Rekap:</span>
-          </div>
-          <input 
-            type="month" 
-            id="month-picker"
-            value="2026-08" 
-            onchange="handleMonthChange(this.value)"
-            class="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs sm:text-sm text-white focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 sm:flex items-center gap-2">
-          <button 
-            onclick="openManualModal()"
-            class="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-xl text-xs font-semibold transition active:scale-95"
-          >
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            Tambah Manual
-          </button>
-          <button 
-            onclick="exportToCSV()"
-            class="flex items-center justify-center gap-1.5 px-3.5 py-2 sm:py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 transition active:scale-95"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-            Export Excel
-          </button>
-        </div>
-      </div>
-
-      <!-- Summary Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div class="bg-gradient-to-br from-slate-800 to-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-slate-400">Total Pembelian Saldo</span>
-            <div class="p-2 bg-blue-500/10 text-blue-400 rounded-xl">
-              <i data-lucide="trending-up" class="w-5 h-5"></i>
-            </div>
-          </div>
-          <div class="mt-3">
-            <div id="stat-total-spend" class="text-2xl font-bold text-white">Rp 0</div>
-            <p id="stat-period-label" class="text-xs text-slate-400 mt-1">Periode 2026-08</p>
-          </div>
-          <div class="absolute -bottom-6 -right-6 w-20 h-20 bg-blue-500/5 rounded-full blur-xl"></div>
-        </div>
-
-        <div class="bg-gradient-to-br from-slate-800 to-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-slate-400">Jumlah Transaksi Top-Up</span>
-            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
-              <i data-lucide="file-text" class="w-5 h-5"></i>
-            </div>
-          </div>
-          <div class="mt-3">
-            <div id="stat-tx-count" class="text-2xl font-bold text-white">0 kali</div>
-            <p class="text-xs text-emerald-400 mt-1 flex items-center gap-1">
-              <i data-lucide="check-circle" class="w-3 h-3"></i> Otomatis Terdeteksi
-            </p>
-          </div>
-        </div>
-
-        <div class="bg-gradient-to-br from-slate-800 to-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-slate-400">Kartu Aktif Diisi</span>
-            <div class="p-2 bg-purple-500/10 text-purple-400 rounded-xl">
-              <i data-lucide="credit-card" class="w-5 h-5"></i>
-            </div>
-          </div>
-          <div class="mt-3">
-            <div id="stat-active-cards" class="text-2xl font-bold text-white">0 Kartu</div>
-            <p class="text-xs text-slate-400 mt-1">e-Money, Flazz, Brizzi, TapCash</p>
-          </div>
-        </div>
-
-        <div class="bg-gradient-to-br from-slate-800 to-slate-800/80 p-5 rounded-2xl border border-slate-700/60 shadow-sm relative overflow-hidden">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-medium text-slate-400">Proses Telegram Bot AI</span>
-            <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
-              <i data-lucide="sparkles" class="w-5 h-5"></i>
-            </div>
-          </div>
-          <div class="mt-3">
-            <div id="stat-bot-count" class="text-2xl font-bold text-white">0 Invoice</div>
-            <p class="text-xs text-indigo-400 mt-1">Via Gemini Vision OCR</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Charts Row -->
-      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Daily Trend Bar Chart -->
-        <div class="lg:col-span-2 bg-slate-800/50 p-5 rounded-2xl border border-slate-700/60">
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <h2 class="text-sm font-bold text-white">Grafik Harian Top-Up Saldo</h2>
-              <p class="text-xs text-slate-400">Distribusi nominal pembelian e-toll per hari</p>
-            </div>
-          </div>
-          <div class="h-64 w-full relative">
-            <canvas id="dailyBarChart"></canvas>
-          </div>
-        </div>
-
-        <!-- Provider Doughnut Chart -->
-        <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/60 flex flex-col justify-between">
-          <div>
-            <h2 class="text-sm font-bold text-white">Distribusi Jenis Kartu</h2>
-            <p class="text-xs text-slate-400">Persentase pengisian per jenis e-money</p>
-          </div>
-          <div class="h-56 w-full flex items-center justify-center relative my-2">
-            <canvas id="providerPieChart"></canvas>
-          </div>
-          <div id="provider-footer-count" class="text-xs text-center text-slate-400 pt-2 border-t border-slate-700/50">
-            Total 0 Jenis Bank Penerbit
-          </div>
-        </div>
-      </div>
-
-      <!-- Dashboard Recent Transactions Table -->
-      <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/60">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-bold text-white">Transaksi Terbaru Bulan Ini</h2>
-          <button onclick="switchTab('records')" class="text-xs text-blue-400 hover:underline flex items-center gap-1 font-medium">
-            Lihat Semua Transaksi <i data-lucide="chevron-right" class="w-3 h-3"></i>
-          </button>
-        </div>
-
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-900/60 text-slate-400 uppercase tracking-wider border-b border-slate-700/50">
-              <tr>
-                <th class="px-4 py-3">Tanggal & Jam</th>
-                <th class="px-4 py-3">Nomor Kartu</th>
-                <th class="px-4 py-3">Jenis Kartu</th>
-                <th class="px-4 py-3">Merchant</th>
-                <th class="px-4 py-3">Sumber</th>
-                <th class="px-4 py-3 text-right">Nominal (Rp)</th>
-              </tr>
-            </thead>
-            <tbody id="dashboard-recent-table" class="divide-y divide-slate-700/40">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 2: TELEGRAM BOT AI -->
-    <section id="tab-telegram" class="tab-content hidden space-y-6">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <!-- Chat Bot Widget: Responsive Height for Mobile and Desktop -->
-        <div class="lg:col-span-6 bg-slate-800/80 rounded-2xl border border-slate-700/60 overflow-hidden flex flex-col h-[500px] sm:h-[600px] lg:h-[650px] shadow-xl">
-          <!-- Bot Header -->
-          <div class="bg-slate-900 px-4 py-3.5 border-b border-slate-700/60 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="relative">
-                <div class="p-2 bg-blue-600 rounded-full text-white shadow-md shadow-blue-500/30">
-                  <i data-lucide="bot" class="w-5 h-5"></i>
-                </div>
-                <span class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-slate-900 rounded-full"></span>
-              </div>
-              <div>
-                <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
-                  @ETollRecapBot
-                  <i data-lucide="shield-check" class="w-4 h-4 text-blue-400"></i>
-                </h3>
-                <p class="text-[10px] text-slate-400">Bot Telegram Rekap Otomatis AI Gemini Vision</p>
-              </div>
-            </div>
-            <div class="text-right">
-              <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/20 font-mono">
-                Online 24h
-              </span>
-            </div>
-          </div>
-
-          <!-- Chat Body -->
-          <div id="chat-messages-container" class="flex-1 p-4 overflow-y-auto space-y-4 bg-slate-950/40">
-            <!-- Messages rendered dynamically -->
-          </div>
-
-          <!-- Chat Input -->
-          <div class="p-3 bg-slate-900 border-t border-slate-700/60">
-            <div class="flex items-center gap-2">
-              <label class="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-medium rounded-xl text-xs cursor-pointer shadow-lg shadow-blue-600/20 transition">
-                <i data-lucide="upload" class="w-4 h-4"></i>
-                <span>Upload Foto Invoice Struk Top-Up</span>
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onchange="handleTelegramImageUpload(event)"
-                  class="hidden" 
-                />
-              </label>
-            </div>
-            <p class="text-[10px] text-slate-400 text-center mt-2 flex items-center justify-center gap-1">
-              <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i>
-              Kirim foto invoice untuk memicu sistem OCR AI otomatis
-            </p>
-          </div>
-        </div>
-
-        <!-- Documentation & Backend Code Snippet -->
-        <div class="lg:col-span-6 space-y-6">
-          <div class="bg-slate-800/50 p-5 rounded-2xl border border-slate-700/60">
-            <h3 class="text-sm font-bold text-white flex items-center gap-2">
-              <i data-lucide="smartphone" class="w-4 h-4 text-blue-400"></i>
-              Cara Kerja Integrasi Bot Telegram
-            </h3>
-            <ol class="mt-3 text-xs text-slate-300 space-y-2.5 list-decimal list-inside">
-              <li>Pengguna mengambil foto struk pembelian/top-up e-toll menggunakan kamera ponsel.</li>
-              <li>Kirim foto tersebut ke <strong>@ETollRecapBot</strong> di Telegram.</li>
-              <li>Webhook bot mengirim gambar ke <strong>Gemini Vision OCR AI</strong>.</li>
-              <li>AI mengekstrak: <strong>Nomor Kartu, Nominal, Tanggal, dan Merchant</strong> secara presisi.</li>
-              <li>Data langsung tercatat otomatis ke dalam database rekap bulanan tanpa perlu input manual!</li>
-            </ol>
-          </div>
-
-          <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
-            <div class="px-4 py-2.5 bg-slate-800/80 border-b border-slate-700/60 flex items-center justify-between text-xs">
-              <span class="font-mono text-slate-300 font-semibold">bot_server.py (Code Backend Telegram)</span>
-              <span class="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded">Python + Gemini API</span>
-            </div>
-            <div class="p-4 overflow-x-auto text-[11px] font-mono text-slate-300 leading-relaxed bg-slate-950">
-<pre>import os
-from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
-import google.generativeai as genai
-
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel('gemini-3-flash-preview')
-
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Download photo dari Telegram
-    photo_file = await update.message.photo[-1].get_file()
-    image_bytes = await photo_file.download_as_bytearray()
-    
-    # 2. Kirim ke Gemini AI Vision OCR
-    prompt = "Ekstrak JSON: {cardNumber, nominal, date, cardType, merchant}"
-    response = model.generate_content([
-        {"mime_type": "image/jpeg", "data": bytes(image_bytes)},
-        prompt
-    ])
-    
-    # 3. Simpan ke database Rekap Bulanan
-    data = response.text
-    
-    await update.message.reply_text(f"✅ Struk berhasil dicatat!\n{data}")
-
-app = Application.builder().token("YOUR_TELEGRAM_BOT_TOKEN").build()
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-app.run_polling()</pre>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 3: NFC SCANNER -->
-    <section id="tab-nfc" class="tab-content hidden max-w-4xl mx-auto space-y-6">
-      <div class="bg-gradient-to-br from-slate-800 via-slate-800/90 to-blue-950/40 p-6 rounded-2xl border border-slate-700/60 text-center relative overflow-hidden shadow-xl">
-        <div id="nfc-icon-bg" class="p-4 bg-blue-500/10 text-blue-400 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center border border-blue-500/20">
-          <i data-lucide="wifi" id="nfc-icon" class="w-8 h-8"></i>
-        </div>
-        
-        <h2 class="text-lg font-bold text-white">Deteksi NFC Kartu E-Toll</h2>
-        <p class="text-xs text-slate-300 max-w-md mx-auto mt-1">
-          Tempelkan kartu fisik (e-Money / Flazz / Brizzi / TapCash) pada bagian belakang perangkat atau gunakan simulator di bawah untuk melihat histori frekuensi pembelian.
-        </p>
-
-        <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
-          <button
-            onclick="startNFCScan()"
-            id="nfc-scan-btn"
-            class="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-blue-600/30 flex items-center justify-center gap-2 transition"
-          >
-            <i data-lucide="wifi" class="w-4 h-4"></i>
-            <span id="nfc-btn-text">Aktifkan Sensor Web NFC</span>
-          </button>
-        </div>
-
-        <div id="nfc-not-supported-badge" class="mt-4 hidden inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 rounded-full text-[11px]">
-          <i data-lucide="alert-circle" class="w-3.5 h-3.5"></i>
-          Sensor Web NFC tidak aktif di browser ini. Gunakan Simulator di bawah!
-        </div>
-      </div>
-
-      <!-- Card Search Simulator -->
-      <div class="bg-slate-800/50 p-6 rounded-2xl border border-slate-700/60">
-        <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
-          <i data-lucide="smartphone" class="w-4 h-4 text-emerald-400"></i>
-          Simulator Tap / Scan Kartu (Manual Search)
-        </h3>
-        
-        <div class="flex flex-col sm:flex-row gap-3">
-          <div class="relative flex-1">
-            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
-            <input
-              type="text"
-              id="nfc-manual-input"
-              value="6032 8819 4021 9982"
-              placeholder="Masukkan Nomor Kartu E-Toll (misal: 6032 8819 4021 9982)"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 font-mono"
-            />
-          </div>
-          <button
-            onclick="lookupCardStats(document.getElementById('nfc-manual-input').value)"
-            class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 transition flex items-center justify-center gap-2"
-          >
-            <i data-lucide="search" class="w-4 h-4"></i>
-            Cek Histori Kartu Ini
-          </button>
-        </div>
-
-        <!-- Sample Cards Quick Buttons -->
-        <div class="mt-4">
-          <span class="text-[11px] text-slate-400 block mb-2">Pilih Sampel Kartu Terdaftar:</span>
-          <div class="flex flex-wrap gap-2">
-            <button onclick="selectSampleCard('6032 8819 4021 9982')" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-xs font-mono transition flex items-center gap-2 border border-slate-600/50">
-              <span>6032 8819 4021 9982</span>
-              <span class="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">e-Money Mandiri</span>
-            </button>
-            <button onclick="selectSampleCard('6013 1102 9843 1105')" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-xs font-mono transition flex items-center gap-2 border border-slate-600/50">
-              <span>6013 1102 9843 1105</span>
-              <span class="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">BCA Flazz</span>
-            </button>
-            <button onclick="selectSampleCard('6088 2390 1122 4433')" class="px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-200 text-xs font-mono transition flex items-center gap-2 border border-slate-600/50">
-              <span>6088 2390 1122 4433</span>
-              <span class="text-[9px] text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">BRI Brizzi</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Scanned Card Summary Box -->
-      <div id="scanned-card-result" class="hidden bg-slate-800 p-6 rounded-2xl border border-blue-500/40 shadow-xl space-y-6">
-        <div class="flex items-center justify-between border-b border-slate-700 pb-4">
-          <div>
-            <span class="text-xs text-slate-400">Hasil Deteksi NFC Kartu</span>
-            <h3 id="nfc-result-cardno" class="text-lg font-bold font-mono text-blue-400">6032 8819 4021 9982</h3>
-            <p id="nfc-result-cardtype" class="text-xs text-slate-300">e-Money Mandiri</p>
-          </div>
-          <div class="p-3 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
-            <i data-lucide="credit-card" class="w-8 h-8"></i>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-700/50">
-            <span class="text-xs text-slate-400">Frekuensi Isi Ulang</span>
-            <div id="nfc-result-count" class="text-2xl font-bold text-white mt-1">0 Kali</div>
-            <span class="text-[10px] text-emerald-400">Total Transaksi Tercatat</span>
-          </div>
-
-          <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-700/50">
-            <span class="text-xs text-slate-400">Total Akumulasi Pembelian</span>
-            <div id="nfc-result-nominal" class="text-2xl font-bold text-emerald-400 mt-1">Rp 0</div>
-            <span class="text-[10px] text-slate-400">Seluruh Periode</span>
-          </div>
-
-          <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-700/50">
-            <span class="text-xs text-slate-400">Top-Up Terakhir</span>
-            <div id="nfc-result-last" class="text-lg font-bold text-white mt-1">-</div>
-            <span class="text-[10px] text-slate-400">Status Aktif</span>
-          </div>
-        </div>
-
-        <!-- History Table for Card -->
-        <div>
-          <h4 class="text-xs font-bold text-slate-300 mb-3">Histori Lengkap Pembelian Kartu Ini:</h4>
-          <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="bg-slate-900 text-slate-400 uppercase tracking-wider">
-                <tr>
-                  <th class="px-3 py-2">ID</th>
-                  <th class="px-3 py-2">Tanggal</th>
-                  <th class="px-3 py-2">Merchant</th>
-                  <th class="px-3 py-2">Nominal</th>
-                </tr>
-              </thead>
-              <tbody id="nfc-result-history-rows" class="divide-y divide-slate-700/40">
-                <!-- Dynamically populated -->
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TAB 4: ALL RECORDS -->
-    <section id="tab-records" class="tab-content hidden space-y-4">
-      <div class="flex flex-col sm:flex-row items-center justify-between gap-3 bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50">
-        <div class="relative w-full sm:w-80">
-          <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5"></i>
-          <input 
-            type="text"
-            id="search-input"
-            placeholder="Cari No. Kartu, Merchant, atau Ref..."
-            oninput="handleSearchChange(this.value)"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-9 pr-4 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <button
-            onclick="openManualModal()"
-            class="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-600/20 transition flex items-center gap-1.5"
-          >
-            <i data-lucide="plus" class="w-4 h-4"></i>
-            Tambah Manual
-          </button>
-          <button
-            onclick="exportToCSV()"
-            class="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold shadow-md shadow-emerald-600/20 transition flex items-center gap-1.5"
-          >
-            <i data-lucide="download" class="w-4 h-4"></i>
-            Export
-          </button>
-        </div>
-      </div>
-
-      <!-- Data Table -->
-      <div class="bg-slate-800/50 rounded-2xl border border-slate-700/60 overflow-hidden shadow-xl">
-        <div class="overflow-x-auto">
-          <table class="w-full text-left text-xs">
-            <thead class="bg-slate-900/80 text-slate-400 uppercase tracking-wider border-b border-slate-700/60">
-              <tr>
-                <th class="px-4 py-3">ID Transaksi</th>
-                <th class="px-4 py-3">Nomor Kartu</th>
-                <th class="px-4 py-3">Jenis Kartu</th>
-                <th class="px-4 py-3">Tanggal & Jam</th>
-                <th class="px-4 py-3">Merchant / Lokasi</th>
-                <th class="px-4 py-3">Sumber Input</th>
-                <th class="px-4 py-3 text-right">Nominal</th>
-                <th class="px-4 py-3 text-center">Struk</th>
-                <th class="px-4 py-3 text-center">Aksi</th>
-              </tr>
-            </thead>
-            <tbody id="all-records-table-body" class="divide-y divide-slate-700/40">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-  </main>
-
-  <!-- MODAL: Manual Add Transaction -->
-  <div id="manual-modal" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-800 rounded-2xl border border-slate-700 max-w-md w-full p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
-      <h3 class="text-base font-bold text-white mb-4 flex items-center gap-2">
-        <i data-lucide="plus" class="w-5 h-5 text-blue-400"></i>
-        Tambah Rekap Top-Up Manual
-      </h3>
-
-      <form onsubmit="handleManualFormSubmit(event)" class="space-y-4 text-xs">
-        <div>
-          <label class="block text-slate-300 mb-1">Nomor Kartu E-Toll (Format Spasi Contoh: 6032 8819 4021 9982)</label>
-          <input
-            type="text"
-            id="manual-card-number"
-            required
-            placeholder="6032 8819 4021 9982"
-            oninput="formatCardInput(this)"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white font-mono focus:outline-none focus:border-blue-500"
-          />
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-slate-300 mb-1">Nominal (Rp)</label>
-            <input
-              type="number"
-              id="manual-nominal"
-              required
-              placeholder="100000"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-          <div>
-            <label class="block text-slate-300 mb-1">Tanggal Transaksi</label>
-            <input
-              type="date"
-              id="manual-date"
-              required
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-slate-300 mb-1">Jenis Kartu</label>
-            <select
-              id="manual-card-type"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500"
-            >
-              <option value="e-Money Mandiri">e-Money Mandiri</option>
-              <option value="BCA Flazz">BCA Flazz</option>
-              <option value="BRI Brizzi">BRI Brizzi</option>
-              <option value="BNI TapCash">BNI TapCash</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-slate-300 mb-1">Merchant / Lokasi</label>
-            <input
-              type="text"
-              id="manual-merchant"
-              placeholder="Indomaret / ATM"
-              class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-blue-500"
-            />
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-4 border-t border-slate-700">
-          <button
-            type="button"
-            onclick="closeManualModal()"
-            class="px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-xl font-medium"
-          >
-            Batal
-          </button>
-          <button
-            type="submit"
-            class="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-semibold shadow-md shadow-blue-600/20"
-          >
-            Simpan ke Rekap
-          </button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- MODAL: Receipt Image Preview -->
-  <div id="receipt-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-4">
-    <div class="bg-slate-800 rounded-2xl border border-slate-700 max-w-lg w-full p-4 sm:p-5 shadow-2xl relative max-h-[90vh] flex flex-col">
-      <div class="flex items-center justify-between mb-3 shrink-0">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2">
-          <i data-lucide="file-text" class="w-4 h-4 text-blue-400"></i>
-          Pratinjau Struk Invoice
-        </h3>
-        <button
-          onclick="closeReceiptModal()"
-          class="text-slate-400 hover:text-white text-xs font-bold px-2.5 py-1 bg-slate-700 rounded-lg"
-        >
-          Tutup ✕
-        </button>
-      </div>
-
-      <div class="rounded-xl overflow-hidden bg-slate-950 border border-slate-700 flex items-center justify-center flex-1 min-h-0 p-2">
-        <img id="receipt-modal-img" src="" alt="Struk E-Toll" class="max-h-[70vh] w-auto object-contain rounded" />
-      </div>
-    </div>
-  </div>
-
-  <script>
-    // --- Initial State & Sample Data ---
-    const INITIAL_TRANSACTIONS = [
-      {
-        id: 'TX-1001',
-        cardNumber: '6032 8819 4021 9982',
-        nominal: 100000,
-        date: '2026-08-01',
-        time: '08:30',
-        cardType: 'e-Money Mandiri',
-        merchant: 'Indomaret Slamet Riyadi',
-        refNumber: 'INV-20260801-001',
-        status: 'Sukses',
-        source: 'Telegram Bot',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      },
-      {
-        id: 'TX-1002',
-        cardNumber: '6032 8819 4021 9982',
-        nominal: 200000,
-        date: '2026-08-02',
-        time: '14:15',
-        cardType: 'e-Money Mandiri',
-        merchant: 'ATM Mandiri Digital',
-        refNumber: 'INV-20260802-042',
-        status: 'Sukses',
-        source: 'Telegram Bot',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      },
-      {
-        id: 'TX-1003',
-        cardNumber: '6013 1102 9843 1105',
-        nominal: 150000,
-        date: '2026-08-02',
-        time: '19:45',
-        cardType: 'BCA Flazz',
-        merchant: 'Alfamart Adi Sucipto',
-        refNumber: 'INV-20260802-089',
-        status: 'Sukses',
-        source: 'Upload Direct',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      },
-      {
-        id: 'TX-1004',
-        cardNumber: '6032 8819 4021 9982',
-        nominal: 50000,
-        date: '2026-08-03',
-        time: '07:10',
-        cardType: 'e-Money Mandiri',
-        merchant: 'Gerbang Tol Surakarta',
-        refNumber: 'INV-20260803-012',
-        status: 'Sukses',
-        source: 'Telegram Bot',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      },
-      {
-        id: 'TX-1005',
-        cardNumber: '6088 2390 1122 4433',
-        nominal: 250000,
-        date: '2026-07-28',
-        time: '11:20',
-        cardType: 'BRI Brizzi',
-        merchant: 'BRImo Mobile',
-        refNumber: 'INV-20260728-102',
-        status: 'Sukses',
-        source: 'Telegram Bot',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      },
-      {
-        id: 'TX-1006',
-        cardNumber: '6013 1102 9843 1105',
-        nominal: 100000,
-        date: '2026-07-15',
-        time: '16:00',
-        cardType: 'BCA Flazz',
-        merchant: 'M-BCA App',
-        refNumber: 'INV-20260715-055',
-        status: 'Sukses',
-        source: 'Upload Direct',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      }
-    ];
-
-    let transactions = [...INITIAL_TRANSACTIONS];
-    let selectedMonth = '2026-08';
-    let searchQuery = '';
-    let dailyChartInstance = null;
-    let providerChartInstance = null;
-
-    let chatMessages = [
-      { id: 1, sender: 'bot', text: '👋 Halo! Kirimkan foto struk / invoice top-up E-Toll Anda di sini. Saya akan otomatis mengekstrak nomor kartu (format dipisahkan spasi), nominal, dan mencatatnya ke rekap bulanan.', time: '09:00' }
-    ];
-
-    // Helper: Format 16 digits into space-separated string "XXXX XXXX XXXX XXXX"
-    function formatCardNumber(str) {
-      if (!str) return '6032 8819 4021 9982';
-      const clean = str.replace(/[^0-9]/g, '');
-      return clean.replace(/(.{4})/g, '$1 ').trim();
-    }
-
-    function formatCardInput(inputEl) {
-      inputEl.value = formatCardNumber(inputEl.value);
-    }
-
-    // --- STREAMING_CHUNK:Implementing Gemini Vision AI OCR function... ---
-    async function processImageWithGemini(base64Data, mimeType = 'image/jpeg') {
-      try {
-        const systemPrompt = `Anda adalah sistem OCR otomatis ekstraksi struk pembelian/top-up E-Toll Indonesia (e-Money Mandiri, BCA Flazz, BRI Brizzi, BNI TapCash).
-Ekstrak data berikut dalam JSON persis:
-- cardNumber: Nomor kartu (Format 16 digit dipisahkan spasi per 4 digit, contoh "6032 8819 4021 9982", jangan gunakan tanda strip -)
-- nominal: Nominal isi ulang dalam angka (misal 100000)
-- date: Tanggal transaksi format YYYY-MM-DD
-- cardType: Jenis kartu (misal 'e-Money Mandiri', 'BCA Flazz', 'BRI Brizzi', 'BNI TapCash')
-- merchant: Nama merchant atau lokasi (misal Indomaret, ATM, Tokopedia)
-- refNumber: Nomor referensi atau ID Struk jika ada.`;
-
-        const userPrompt = "Ekstrak informasi dari struk topup e-toll ini ke format JSON.";
-
-        const payload = {
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: userPrompt },
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                  }
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#2563eb',
+                            600: '#1d4ed8',
+                            700: '#1e40af',
+                            800: '#1e3a8a',
+                            900: '#172554',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
                 }
-              ]
             }
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: "OBJECT",
-              properties: {
-                cardNumber: { type: "STRING" },
-                nominal: { type: "NUMBER" },
-                date: { type: "STRING" },
-                cardType: { type: "STRING" },
-                merchant: { type: "STRING" },
-                refNumber: { type: "STRING" }
-              },
-              required: ["cardNumber", "nominal", "date"]
+        }
+    </script>
+
+    <!-- Google Fonts & CDN Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- React & Babel Standalone -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.05); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); border-radius: 8px; }
+        @media print {
+            .no-print { display: none !important; }
+            body { background: white !important; color: black !important; }
+        }
+    </style>
+</head>
+<body class="text-slate-800 dark:text-slate-100 dark:bg-slate-900 transition-colors duration-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+
+        // Helper Functions
+        function formatRupiah(number) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number || 0);
+        }
+
+        function formatDateIndo(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+        }
+
+        function formatCardNumber(val) {
+            if (!val) return '';
+            const cleaned = val.toString().replace(/\D/g, '').slice(0, 16);
+            return cleaned.replace(/(.{4})/g, '$1 ').trim();
+        }
+
+        function terbilangRupiah(num) {
+            const angka = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+            num = Math.floor(Math.abs(num || 0));
+            if (num === 0) return "Nol Rupiah";
+            function terbilang(n) {
+                if (n < 12) return angka[n];
+                if (n < 20) return terbilang(n - 10) + " Belas";
+                if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh " + terbilang(n % 10);
+                if (n < 1000) return "Seratus " + terbilang(n - 100);
+                if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus " + terbilang(n % 100);
+                if (n < 2000) return "Seribu " + terbilang(n - 1000);
+                if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu " + terbilang(n % 1000);
+                if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta " + terbilang(n % 1000000);
+                return terbilang(Math.floor(n / 1000000000)) + " Milyar " + terbilang(n % 1000000000);
             }
-          },
-          systemInstruction: {
-            parts: [{ text: systemPrompt }]
-          }
-        };
-
-        const apiKey = ""; // Canvas runtime API key
-        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-        const res = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        if (!res.ok) throw new Error("Gagal menghubungi API AI Gemini Vision");
-
-        const jsonRes = await res.json();
-        const extractedText = jsonRes.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        if (extractedText) {
-          const parsed = JSON.parse(extractedText);
-          const rawCard = parsed.cardNumber || '6032 8819 4021 9982';
-          return {
-            cardNumber: formatCardNumber(rawCard),
-            nominal: parsed.nominal || 100000,
-            date: parsed.date || new Date().toISOString().split('T')[0],
-            cardType: parsed.cardType || 'e-Money Mandiri',
-            merchant: parsed.merchant || 'Indomaret Slamet Riyadi',
-            refNumber: parsed.refNumber || `INV-${Date.now().toString().slice(-6)}`
-          };
-        } else {
-          throw new Error("Respon kosong");
+            return terbilang(num).replace(/\s+/g, ' ').trim() + " Rupiah";
         }
-      } catch (err) {
-        console.warn("Fallback to simulated OCR parsing due to error:", err);
-        return {
-          cardNumber: '6032 8819 4021 9982',
-          nominal: 150000,
-          date: new Date().toISOString().split('T')[0],
-          cardType: 'e-Money Mandiri',
-          merchant: 'Alfamart Express',
-          refNumber: `AUT-${Math.floor(100000 + Math.random() * 900000)}`
-        };
-      }
-    }
 
-    // --- STREAMING_CHUNK:Implementing chart generation and tab controls... ---
-    function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
-      document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.remove('bg-blue-600', 'text-white', 'shadow-md');
-        btn.classList.add('text-slate-400', 'hover:text-white', 'hover:bg-slate-700/50');
-      });
-
-      const targetSection = document.getElementById(`tab-${tabId}`);
-      if (targetSection) targetSection.classList.remove('hidden');
-
-      const activeBtn = document.getElementById(`tab-btn-${tabId}`);
-      if (activeBtn) {
-        activeBtn.classList.remove('text-slate-400', 'hover:text-white', 'hover:bg-slate-700/50');
-        activeBtn.classList.add('bg-blue-600', 'text-white', 'shadow-md');
-      }
-
-      if (tabId === 'dashboard') {
-        renderDashboard();
-      } else if (tabId === 'telegram') {
-        renderChatMessages();
-      } else if (tabId === 'nfc') {
-        lookupCardStats(document.getElementById('nfc-manual-input').value);
-      } else if (tabId === 'records') {
-        renderAllRecordsTable();
-      }
-    }
-
-    function handleMonthChange(val) {
-      selectedMonth = val;
-      renderDashboard();
-    }
-
-    function renderDashboard() {
-      const filteredByMonth = transactions.filter(t => t.date.startsWith(selectedMonth));
-      const totalSpend = filteredByMonth.reduce((acc, curr) => acc + curr.nominal, 0);
-      const activeCardsCount = new Set(filteredByMonth.map(t => t.cardNumber)).size;
-      const botProcessCount = filteredByMonth.filter(t => t.source === 'Telegram Bot').length;
-
-      document.getElementById('stat-total-spend').textContent = `Rp ${totalSpend.toLocaleString('id-ID')}`;
-      document.getElementById('stat-period-label').textContent = `Periode ${selectedMonth}`;
-      document.getElementById('stat-tx-count').textContent = `${filteredByMonth.length} kali`;
-      document.getElementById('stat-active-cards').textContent = `${activeCardsCount} Kartu`;
-      document.getElementById('stat-bot-count').textContent = `${botProcessCount} Invoice`;
-
-      // Render Recent Table
-      const recentTbody = document.getElementById('dashboard-recent-table');
-      if (filteredByMonth.length === 0) {
-        recentTbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">Belum ada data rekap transaksi di bulan ini.</td></tr>`;
-      } else {
-        recentTbody.innerHTML = filteredByMonth.slice(0, 5).map(tx => `
-          <tr class="hover:bg-slate-700/30 transition">
-            <td class="px-4 py-3 font-medium text-slate-200">
-              ${tx.date} <span class="text-slate-500 text-[10px]">${tx.time}</span>
-            </td>
-            <td class="px-4 py-3 font-mono text-blue-300">${tx.cardNumber}</td>
-            <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-slate-700 text-slate-300 text-[10px]">${tx.cardType}</span></td>
-            <td class="px-4 py-3 text-slate-300">${tx.merchant}</td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${tx.source === 'Telegram Bot' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-700 text-slate-300'}">
-                ${tx.source}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-right font-bold text-emerald-400">+ Rp ${tx.nominal.toLocaleString('id-ID')}</td>
-          </tr>
-        `).join('');
-      }
-
-      renderCharts(filteredByMonth);
-    }
-
-    function renderCharts(filteredByMonth) {
-      // 1. Daily Bar Chart Data
-      const [year, month] = selectedMonth.split('-');
-      const daysInMonth = new Date(year, month, 0).getDate();
-      const dailyLabels = [];
-      const dailyData = [];
-
-      for (let i = 1; i <= daysInMonth; i++) {
-        const dayStr = String(i).padStart(2, '0');
-        dailyLabels.push(`Tgl ${dayStr}`);
-        const total = filteredByMonth
-          .filter(t => t.date.endsWith(`-${dayStr}`))
-          .reduce((sum, t) => sum + t.nominal, 0);
-        dailyData.push(total);
-      }
-
-      const barCtx = document.getElementById('dailyBarChart').getContext('2d');
-      if (dailyChartInstance) dailyChartInstance.destroy();
-
-      dailyChartInstance = new Chart(barCtx, {
-        type: 'bar',
-        data: {
-          labels: dailyLabels,
-          datasets: [{
-            label: 'Total Top-Up',
-            data: dailyData,
-            backgroundColor: '#3B82F6',
-            borderRadius: 6
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: {
-            x: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { display: false } },
-            y: { ticks: { color: '#94a3b8', font: { size: 10 } }, grid: { color: '#334155' } }
-          }
-        }
-      });
-
-      // 2. Provider Distribution Pie Chart
-      const providerMap = {};
-      filteredByMonth.forEach(t => {
-        const provider = t.cardType || 'Lainnya';
-        providerMap[provider] = (providerMap[provider] || 0) + t.nominal;
-      });
-
-      const providerLabels = Object.keys(providerMap);
-      const providerValues = Object.values(providerMap);
-      const colors = ['#3B82F6', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6'];
-
-      document.getElementById('provider-footer-count').textContent = `Total ${providerLabels.length} Jenis Bank Penerbit`;
-
-      const pieCtx = document.getElementById('providerPieChart').getContext('2d');
-      if (providerChartInstance) providerChartInstance.destroy();
-
-      providerChartInstance = new Chart(pieCtx, {
-        type: 'doughnut',
-        data: {
-          labels: providerLabels,
-          datasets: [{
-            data: providerValues,
-            backgroundColor: colors.slice(0, providerLabels.length)
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'bottom',
-              labels: { color: '#94a3b8', font: { size: 11 } }
+        // Gemini OCR Call
+        async function callGeminiOCR(base64DataUrl, userApiKey) {
+            let mimeType = "image/png";
+            let base64Data = base64DataUrl;
+            const match = base64DataUrl.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+            if (match) {
+                mimeType = match[1];
+                base64Data = match[2];
             }
-          }
+
+            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice e-Toll Indonesia.";
+            const userPrompt = "Ekstrak: etollNumber (16 digit), merchant, amount, invoiceNumber, date (YYYY-MM-DD).";
+            const apiKey = userApiKey || "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ role: "user", parts: [{ text: userPrompt }, { inlineData: { mimeType, data: base64Data } }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json",
+                    responseSchema: {
+                        type: "OBJECT",
+                        properties: {
+                            etollNumber: { type: "STRING" },
+                            merchant: { type: "STRING" },
+                            amount: { type: "NUMBER" },
+                            invoiceNumber: { type: "STRING" },
+                            date: { type: "STRING" }
+                        },
+                        required: ["etollNumber", "merchant", "amount", "invoiceNumber", "date"]
+                    }
+                }
+            };
+
+            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            if (!response.ok) throw new Error("Gagal OCR.");
+            const result = await response.json();
+            return JSON.parse(result.candidates[0].content.parts[0].text);
         }
-      });
-    }
 
-    // --- Telegram Bot Simulator logic ---
-    function renderChatMessages() {
-      const container = document.getElementById('chat-messages-container');
-      container.innerHTML = chatMessages.map(msg => {
-        const isUser = msg.sender === 'user';
-        return `
-          <div class="flex ${isUser ? 'justify-end' : 'justify-start'}">
-            <div class="max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${isUser ? 'bg-blue-600 text-white rounded-br-none shadow-md' : 'bg-slate-800 text-slate-200 border border-slate-700/60 rounded-bl-none shadow-md'}">
-              ${msg.text ? `<div class="whitespace-pre-line">${msg.text}</div>` : ''}
-              ${msg.image ? `<div class="mt-1 rounded-lg overflow-hidden border border-white/10"><img src="${msg.image}" class="max-h-48 w-full object-cover"></div>` : ''}
-              <div class="text-[9px] mt-1 text-right ${isUser ? 'text-blue-200' : 'text-slate-400'}">${msg.time}</div>
-            </div>
-          </div>
-        `;
-      }).join('');
+        const INITIAL_CARDS = [
+            { id: 'card-1', label: 'Mandiri e-Money Utama', number: '6032 9812 3456 7890', bank: 'Mandiri', color: 'from-blue-600 to-indigo-700' },
+            { id: 'card-2', label: 'BCA Flazz Operasional', number: '6013 1234 5678 9012', bank: 'BCA', color: 'from-sky-500 to-blue-600' }
+        ];
 
-      container.scrollTop = container.scrollHeight;
-    }
+        const currentYearMonth = new Date().toISOString().substring(0, 7);
 
-    async function handleTelegramImageUpload(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
+        function App() {
+            const [cards, setCards] = React.useState(() => JSON.parse(localStorage.getItem('etoll_cards')) || INITIAL_CARDS);
+            const [transactions, setTransactions] = React.useState(() => JSON.parse(localStorage.getItem('etoll_transactions')) || []);
+            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => localStorage.getItem('etoll_fb_pid') || '');
+            const [geminiApiKey, setGeminiApiKey] = React.useState(() => localStorage.getItem('etoll_gemini_key') || '');
 
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const base64Url = e.target.result;
-        const base64Data = base64Url.split(',')[1];
-        const mimeType = file.type || 'image/jpeg';
+            const [spjProfile, setSpjProfile] = React.useState(() => JSON.parse(localStorage.getItem('etoll_spj_profile')) || {
+                applicantName: 'Ahmad Subagja',
+                division: 'Operasional Logistik',
+                vehicleNopol: 'B 1928 SFA',
+                companyName: 'PT Nusantara Trans',
+                supervisorName: 'Hendra Wijaya'
+            });
 
-        // 1. User photo message
-        chatMessages.push({
-          id: Date.now(),
-          sender: 'user',
-          image: base64Url,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
-        renderChatMessages();
+            const [activeTab, setActiveTab] = React.useState('dashboard');
+            const [selectedMonth, setSelectedMonth] = React.useState(currentYearMonth);
+            const [selectedCardFilter, setSelectedCardFilter] = React.useState('ALL');
+            const [searchQuery, setSearchQuery] = React.useState('');
 
-        // Typing indicator
-        const container = document.getElementById('chat-messages-container');
-        const typingEl = document.createElement('div');
-        typingEl.id = 'bot-typing-indicator';
-        typingEl.className = 'flex justify-start';
-        typingEl.innerHTML = `
-          <div class="bg-slate-800 text-slate-300 border border-slate-700/60 rounded-2xl rounded-bl-none p-3 text-xs flex items-center gap-2">
-            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin text-blue-400"></i>
-            <span>Mengekstrak data invoice dengan AI Gemini Vision...</span>
-          </div>
-        `;
-        container.appendChild(typingEl);
-        lucide.createIcons();
-        container.scrollTop = container.scrollHeight;
+            const [showScanModal, setShowScanModal] = React.useState(false);
+            const [showNfcModal, setShowNfcModal] = React.useState(false);
+            const [showSpjPrintModal, setShowSpjPrintModal] = React.useState(false);
+            const [previewReceiptImg, setPreviewReceiptImg] = React.useState(null);
+            const [editingTransaction, setEditingTransaction] = React.useState(null);
+            const [deletingTx, setDeletingTx] = React.useState(null);
+            const [toast, setToast] = React.useState(null);
 
-        // 2. Call Gemini OCR
-        const resultData = await processImageWithGemini(base64Data, mimeType);
+            // Fetch Firebase Firestore real-time updates
+            const fetchCloudData = React.useCallback(async () => {
+                if (!firebaseProjectId) return;
+                try {
+                    const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/etoll_transactions`;
+                    const res = await fetch(url);
+                    if (!res.ok) return;
+                    const data = await res.json();
+                    if (data.documents) {
+                        const cloudTxs = data.documents.map(d => {
+                            const f = d.fields;
+                            return {
+                                id: d.name.split('/').pop(),
+                                etollNumber: f.etollNumber?.stringValue || '',
+                                merchant: f.merchant?.stringValue || '',
+                                amount: Number(f.amount?.integerValue || f.amount?.doubleValue || 0),
+                                invoiceNumber: f.invoiceNumber?.stringValue || '',
+                                date: f.date?.stringValue || '',
+                                receiptImg: f.receiptImg?.stringValue || null,
+                                createdAt: f.createdAt?.stringValue || new Date().toISOString(),
+                                source: f.source?.stringValue || 'Cloud'
+                            };
+                        });
+                        setTransactions(cloudTxs);
+                    }
+                } catch (e) {
+                    console.warn("Cloud Syncing Error:", e);
+                }
+            }, [firebaseProjectId]);
 
-        // Remove indicator
-        const ind = document.getElementById('bot-typing-indicator');
-        if (ind) ind.remove();
+            // Auto poll cloud data every 10 seconds if Firebase is configured
+            React.useEffect(() => {
+                fetchCloudData();
+                const interval = setInterval(fetchCloudData, 10000);
+                return () => clearInterval(interval);
+            }, [fetchCloudData]);
 
-        // 3. Save to state
-        const newTx = {
-          id: `TX-${Math.floor(1000 + Math.random() * 9000)}`,
-          cardNumber: resultData.cardNumber,
-          nominal: resultData.nominal,
-          date: resultData.date,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          cardType: resultData.cardType,
-          merchant: resultData.merchant,
-          refNumber: resultData.refNumber,
-          status: 'Sukses',
-          source: 'Telegram Bot',
-          receiptUrl: base64Url
-        };
-        transactions.unshift(newTx);
+            // Sync LocalStorage
+            React.useEffect(() => { localStorage.setItem('etoll_cards', JSON.stringify(cards)); }, [cards]);
+            React.useEffect(() => { localStorage.setItem('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
+            React.useEffect(() => { localStorage.setItem('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
+            React.useEffect(() => { localStorage.setItem('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
 
-        // 4. Bot reply
-        chatMessages.push({
-          id: Date.now() + 1,
-          sender: 'bot',
-          text: `✅ ** Invoice Berhasil Diproses!**\n\n💳 **Kartu:** ${resultData.cardNumber}\n💰 **Nominal:** Rp ${resultData.nominal.toLocaleString('id-ID')}\n📅 **Tanggal:** ${resultData.date}\n🏦 **Jenis:** ${resultData.cardType}\n🏪 **Merchant:** ${resultData.merchant}\n🧾 **Ref:** ${resultData.refNumber}\n\n*Data telah otomatis ditambahkan ke Rekap Pembelian Bulanan.*`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
+            const showToastNotification = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 4000);
+            };
 
-        renderChatMessages();
-      };
+            const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
+                if (!invoiceNum || !invoiceNum.trim()) return false;
+                const clean = invoiceNum.trim().toUpperCase();
+                return transactions.some(t => t.id !== excludeId && t.invoiceNumber && t.invoiceNumber.trim().toUpperCase() === clean);
+            };
 
-      reader.readAsDataURL(file);
-    }
+            const handleAddCard = (newCardData) => {
+                const formattedNum = formatCardNumber(newCardData.number);
+                const existing = cards.find(c => c.number.replace(/\s+/g, '') === formattedNum.replace(/\s+/g, ''));
+                if (existing) return existing;
 
-    // --- STREAMING_CHUNK:Implementing NFC reader and search logic... ---
-    async function startNFCScan() {
-      if (!('NDEFReader' in window)) {
-        document.getElementById('nfc-not-supported-badge').classList.remove('hidden');
-        return;
-      }
+                const newCard = {
+                    id: 'card-' + Date.now(),
+                    label: newCardData.label || 'e-Toll Card ' + (cards.length + 1),
+                    number: formattedNum,
+                    bank: newCardData.bank || 'Mandiri',
+                    color: 'from-indigo-600 to-purple-700'
+                };
+                setCards(prev => [...prev, newCard]);
+                showToastNotification(`Kartu e-Toll baru (${formattedNum}) berhasil ditambahkan.`);
+                return newCard;
+            };
 
-      const btnText = document.getElementById('nfc-btn-text');
-      try {
-        btnText.textContent = 'Mencari Kartu NFC...';
-        const ndef = new window.NDEFReader();
-        await ndef.scan();
-        ndef.addEventListener("reading", ({ serialNumber }) => {
-          const cardId = serialNumber ? formatCardNumber(serialNumber) : '6032 8819 4021 9982';
-          document.getElementById('nfc-manual-input').value = cardId;
-          lookupCardStats(cardId);
-          btnText.textContent = 'Aktifkan Sensor Web NFC';
-        });
-      } catch (err) {
-        btnText.textContent = 'Aktifkan Sensor Web NFC';
-        console.error("NFC Scan error:", err);
-      }
-    }
+            const handleSaveTransaction = async (txData) => {
+                let cardNum = formatCardNumber(txData.etollNumber);
+                if (cardNum && !cards.some(c => c.number.replace(/\s+/g, '') === cardNum.replace(/\s+/g, ''))) {
+                    handleAddCard({ label: 'Auto ' + (txData.merchant || 'Card'), number: cardNum, bank: 'e-Toll' });
+                }
 
-    function selectSampleCard(cardNum) {
-      document.getElementById('nfc-manual-input').value = cardNum;
-      lookupCardStats(cardNum);
-    }
+                if (txData.id) {
+                    setTransactions(prev => prev.map(t => t.id === txData.id ? { ...txData, etollNumber: cardNum } : t));
+                } else {
+                    const newTx = { ...txData, id: 'tx-' + Date.now(), etollNumber: cardNum, createdAt: new Date().toISOString() };
+                    setTransactions(prev => [newTx, ...prev]);
+                    
+                    if (newTx.date) setSelectedMonth(newTx.date.substring(0, 7));
+                    setSelectedCardFilter('ALL');
 
-    function lookupCardStats(cardNumberInput) {
-      const cleanSearch = formatCardNumber(cardNumberInput).toLowerCase();
-      const matchedTxs = transactions.filter(t => formatCardNumber(t.cardNumber).toLowerCase() === cleanSearch);
+                    // If Cloud is enabled, push directly
+                    if (firebaseProjectId) {
+                        try {
+                            const url = `https://firestore.googleapis.com/v1/projects/${firebaseProjectId}/databases/(default)/documents/etoll_transactions`;
+                            await fetch(url, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    fields: {
+                                        etollNumber: { stringValue: newTx.etollNumber },
+                                        merchant: { stringValue: newTx.merchant },
+                                        amount: { integerValue: newTx.amount },
+                                        invoiceNumber: { stringValue: newTx.invoiceNumber },
+                                        date: { stringValue: newTx.date },
+                                        receiptImg: { stringValue: newTx.receiptImg || '' },
+                                        createdAt: { stringValue: newTx.createdAt }
+                                    }
+                                })
+                            });
+                        } catch (e) { console.error("Cloud Save Error:", e); }
+                    }
+                }
+                setShowScanModal(false);
+                setEditingTransaction(null);
+                showToastNotification('Transaksi berhasil dicatat!');
+            };
 
-      const resultBox = document.getElementById('scanned-card-result');
-      resultBox.classList.remove('hidden');
+            const handleDeleteTransaction = (id) => {
+                setTransactions(prev => prev.filter(t => t.id !== id));
+                setDeletingTx(null);
+                showToastNotification('Transaksi dihapus. Nomor invoice kini dapat di-scan/digunakan kembali.', 'info');
+            };
 
-      document.getElementById('nfc-result-cardno').textContent = formatCardNumber(cardNumberInput);
-      document.getElementById('nfc-result-cardtype').textContent = matchedTxs.length > 0 ? matchedTxs[0].cardType : 'e-Money / E-Toll Card';
-      document.getElementById('nfc-result-count').textContent = `${matchedTxs.length} Kali`;
-      
-      const totalNominal = matchedTxs.reduce((sum, t) => sum + t.nominal, 0);
-      document.getElementById('nfc-result-nominal').textContent = `Rp ${totalNominal.toLocaleString('id-ID')}`;
-      document.getElementById('nfc-result-last').textContent = matchedTxs.length > 0 ? matchedTxs[0].date : 'Belum ada';
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <header className="sticky top-0 z-40 bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-600 flex items-center justify-center text-white shadow-md">
+                                    <i className="fa-solid fa-[#1e3a8a] fa-road text-lg"></i>
+                                </div>
+                                <div>
+                                    <h1 className="font-black text-xl bg-gradient-to-r from-brand-600 to-indigo-600 bg-clip-text text-transparent">
+                                        RekapToll <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">24/7 Cloud Sync</span>
+                                    </h1>
+                                </div>
+                            </div>
 
-      const rowsEl = document.getElementById('nfc-result-history-rows');
-      if (matchedTxs.length === 0) {
-        rowsEl.innerHTML = `<tr><td colspan="4" class="px-3 py-4 text-center text-slate-500">Kartu ini belum memiliki riwayat pembelian saldo.</td></tr>`;
-      } else {
-        rowsEl.innerHTML = matchedTxs.map(item => `
-          <tr class="hover:bg-slate-700/20">
-            <td class="px-3 py-2 font-mono text-slate-400">${item.id}</td>
-            <td class="px-3 py-2 text-slate-200">${item.date} ${item.time}</td>
-            <td class="px-3 py-2 text-slate-300">${item.merchant}</td>
-            <td class="px-3 py-2 text-emerald-400 font-bold">Rp ${item.nominal.toLocaleString('id-ID')}</td>
-          </tr>
-        `).join('');
-      }
-    }
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setShowNfcModal(true)} className="bg-purple-600 hover:bg-purple-700 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2">
+                                    <i className="fa-solid fa-nfc-symbol text-sm animate-pulse"></i>
+                                    <span>NFC Reader</span>
+                                </button>
+                                <button onClick={() => { setEditingTransaction(null); setShowScanModal(true); }} className="bg-brand-600 hover:bg-brand-700 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2">
+                                    <i className="fa-solid fa-camera text-xs"></i>
+                                    <span>Scan Struk</span>
+                                </button>
+                            </div>
+                        </div>
 
-    // --- STREAMING_CHUNK:Implementing data export and manual record actions... ---
-    function renderAllRecordsTable() {
-      const tbody = document.getElementById('all-records-table-body');
-      const filtered = transactions.filter(t => {
-        const query = searchQuery.toLowerCase();
-        return t.cardNumber.toLowerCase().includes(query) ||
-               t.merchant.toLowerCase().includes(query) ||
-               t.refNumber.toLowerCase().includes(query);
-      });
+                        <div className="max-w-7xl mx-auto px-4 flex space-x-2 border-t border-slate-100 dark:border-slate-700/50 overflow-x-auto">
+                            <button onClick={() => setActiveTab('dashboard')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'dashboard' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
+                                <i className="fa-solid fa-chart-pie"></i> Dasbor
+                            </button>
+                            <button onClick={() => setActiveTab('transactions')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'transactions' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
+                                <i className="fa-solid fa-receipt"></i> Transaksi ({transactions.length})
+                            </button>
+                            <button onClick={() => setActiveTab('cloud_config')} className={`py-2.5 px-4 text-xs font-semibold border-b-2 flex items-center gap-2 ${activeTab === 'cloud_config' ? 'border-brand-600 text-brand-600' : 'text-slate-500'}`}>
+                                <i className="fa-solid fa-cloud text-sky-500"></i> Integrasi Bot 24 Jam
+                            </button>
+                        </div>
+                    </header>
 
-      if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="9" class="px-4 py-12 text-center text-slate-500">Tidak ada data transaksi yang sesuai dengan pencarian.</td></tr>`;
-        return;
-      }
+                    {toast && (
+                        <div className="fixed bottom-5 right-5 z-50">
+                            <div className="px-4 py-3 rounded-2xl bg-slate-900 text-white flex items-center gap-3 text-xs font-medium shadow-2xl">
+                                <i className="fa-solid fa-circle-check text-emerald-400"></i>
+                                <span>{toast.msg}</span>
+                            </div>
+                        </div>
+                    )}
 
-      tbody.innerHTML = filtered.map(tx => `
-        <tr class="hover:bg-slate-700/30 transition">
-          <td class="px-4 py-3 font-mono text-slate-400">${tx.id}</td>
-          <td class="px-4 py-3 font-mono font-bold text-blue-300">${tx.cardNumber}</td>
-          <td class="px-4 py-3"><span class="px-2 py-0.5 rounded bg-slate-700 text-slate-200 text-[10px]">${tx.cardType}</span></td>
-          <td class="px-4 py-3 text-slate-200">${tx.date} <span class="text-slate-500 text-[10px]">${tx.time}</span></td>
-          <td class="px-4 py-3 text-slate-300">${tx.merchant}</td>
-          <td class="px-4 py-3">
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${tx.source === 'Telegram Bot' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-slate-700 text-slate-300'}">
-              ${tx.source}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-right font-bold text-emerald-400">Rp ${tx.nominal.toLocaleString('id-ID')}</td>
-          <td class="px-4 py-3 text-center">
-            ${tx.receiptUrl ? `<button onclick="openReceiptModal('${tx.receiptUrl}')" class="p-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg transition" title="Lihat Foto Struk"><i data-lucide="eye" class="w-3.5 h-3.5"></i></button>` : '-'}
-          </td>
-          <td class="px-4 py-3 text-center">
-            <button onclick="deleteTransaction('${tx.id}')" class="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition" title="Hapus Rekap Ini"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
-          </td>
-        </tr>
-      `).join('');
+                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                        <p className="text-xs font-bold text-slate-400 uppercase">Total e-Toll Bulan Ini</p>
+                                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                                            {formatRupiah(transactions.filter(t => t.date && t.date.startsWith(selectedMonth)).reduce((s,t) => s + Number(t.amount||0), 0))}
+                                        </h3>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                        <p className="text-xs font-bold text-slate-400 uppercase">Jumlah Transaksi</p>
+                                        <h3 className="text-2xl font-black text-slate-900 dark:text-white mt-1">
+                                            {transactions.filter(t => t.date && t.date.startsWith(selectedMonth)).length} Transaksi
+                                        </h3>
+                                    </div>
+                                    <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                                        <p className="text-xs font-bold text-slate-400 uppercase">Status Sync Cloud 24/7</p>
+                                        <h3 className="text-sm font-bold text-emerald-500 mt-2 flex items-center gap-1">
+                                            <i className="fa-solid fa-signal animate-pulse"></i> {firebaseProjectId ? 'Terhubung (Firebase Live)' : 'Lokal Mode'}
+                                        </h3>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
-      lucide.createIcons();
-    }
+                        {activeTab === 'transactions' && (
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl border p-4 space-y-4">
+                                <h3 className="font-extrabold text-sm">Daftar Transaksi e-Toll Real-Time</h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-xs">
+                                        <thead>
+                                            <tr className="bg-slate-50 dark:bg-slate-900 text-slate-400 uppercase font-bold text-[10px]">
+                                                <th className="p-3">Tanggal</th>
+                                                <th className="p-3">Merchant</th>
+                                                <th className="p-3">Nomor e-Toll</th>
+                                                <th className="p-3">No. Invoice</th>
+                                                <th className="p-3 text-right">Nominal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y">
+                                            {transactions.map(t => (
+                                                <tr key={t.id}>
+                                                    <td className="p-3">{formatDateIndo(t.date)}</td>
+                                                    <td className="p-3 font-bold">{t.merchant}</td>
+                                                    <td className="p-3 font-mono text-purple-600 font-bold">{t.etollNumber}</td>
+                                                    <td className="p-3 font-mono">{t.invoiceNumber}</td>
+                                                    <td className="p-3 text-right font-black">{formatRupiah(t.amount)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
 
-    function handleSearchChange(val) {
-      searchQuery = val;
-      renderAllRecordsTable();
-    }
+                        {activeTab === 'cloud_config' && (
+                            <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border space-y-4 max-w-2xl mx-auto">
+                                <h3 className="font-extrabold text-lg flex items-center gap-2 text-brand-600">
+                                    <i className="fa-solid fa-cloud"></i> Pengaturan Cloud Sync Bot 24 Jam
+                                </h3>
+                                <div className="space-y-3 text-xs">
+                                    <div>
+                                        <label className="block font-bold mb-1">Firebase Project ID (Cloud Database):</label>
+                                        <input
+                                            type="text"
+                                            placeholder="rekaptoll-db-12345"
+                                            value={firebaseProjectId}
+                                            onChange={(e) => setFirebaseProjectId(e.target.value)}
+                                            className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block font-bold mb-1">Gemini AI API Key (OCR):</label>
+                                        <input
+                                            type="password"
+                                            placeholder="AIzaSy..."
+                                            value={geminiApiKey}
+                                            onChange={(e) => setGeminiApiKey(e.target.value)}
+                                            className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono"
+                                        />
+                                    </div>
+                                    <p className="text-[11px] text-slate-500">
+                                        Setelah memasukkan Firebase Project ID, data transaksi yang dikirim ke Telegram Bot 24 Jam akan otomatis tersinkronisasi ke tampilan web ini secara real-time!
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
 
-    function deleteTransaction(id) {
-      transactions = transactions.filter(t => t.id !== id);
-      renderAllRecordsTable();
-      renderDashboard();
-    }
-
-    // Modal Actions
-    function openManualModal() {
-      document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
-      document.getElementById('manual-modal').classList.remove('hidden');
-    }
-
-    function closeManualModal() {
-      document.getElementById('manual-modal').classList.add('hidden');
-    }
-
-    function handleManualFormSubmit(e) {
-      e.preventDefault();
-      const rawCard = document.getElementById('manual-card-number').value;
-      const nominal = parseFloat(document.getElementById('manual-nominal').value);
-      const date = document.getElementById('manual-date').value;
-      const cardType = document.getElementById('manual-card-type').value;
-      const merchant = document.getElementById('manual-merchant').value || 'Minimarket / ATM';
-
-      const newTx = {
-        id: `TX-${Math.floor(1000 + Math.random() * 9000)}`,
-        cardNumber: formatCardNumber(rawCard),
-        nominal: nominal,
-        date: date,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        cardType: cardType,
-        merchant: merchant,
-        refNumber: `MAN-${Date.now().toString().slice(-6)}`,
-        status: 'Sukses',
-        source: 'Input Manual',
-        receiptUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=400&auto=format&fit=crop&q=60'
-      };
-
-      transactions.unshift(newTx);
-      closeManualModal();
-      renderDashboard();
-      renderAllRecordsTable();
-    }
-
-    function openReceiptModal(url) {
-      document.getElementById('receipt-modal-img').src = url;
-      document.getElementById('receipt-modal').classList.remove('hidden');
-    }
-
-    function closeReceiptModal() {
-      document.getElementById('receipt-modal').classList.add('hidden');
-    }
-
-    function exportToCSV() {
-      const headers = ['ID Transaksi', 'Nomor Kartu', 'Jenis Kartu', 'Nominal', 'Tanggal', 'Jam', 'Merchant', 'Ref No', 'Sumber'];
-      const rows = transactions.map(t => [
-        t.id,
-        `"${t.cardNumber}"`,
-        t.cardType,
-        t.nominal,
-        t.date,
-        t.time,
-        `"${t.merchant}"`,
-        t.refNumber,
-        t.source
-      ]);
-
-      const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Rekap_E-Toll_${selectedMonth}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-
-    // Initialize on page load
-    window.onload = function() {
-      lucide.createIcons();
-      renderDashboard();
-    };
-  </script>
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
 </body>
 </html>
