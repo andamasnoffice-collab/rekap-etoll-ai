@@ -444,21 +444,25 @@
                     const data = await res.json();
                     if (data && typeof data === 'object') {
                         const cloudTxs = Object.keys(data).map(key => ({
-                            id: key,
-                            ...data[key]
+                            fbKey: key,
+                            ...data[key],
+                            id: data[key].id || key
                         }));
 
                         setTransactions(prev => {
-                            const map = new Map();
-                            cloudTxs.forEach(t => map.set(t.invoiceNumber || t.id, t));
-                            prev.forEach(t => {
-                                if (t.invoiceNumber && !map.has(t.invoiceNumber)) {
-                                    map.set(t.invoiceNumber, t);
-                                } else if (!t.invoiceNumber && !map.has(t.id)) {
-                                    map.set(t.id, t);
-                                }
+                            const cloudInvoiceSet = new Set(cloudTxs.map(t => t.invoiceNumber ? t.invoiceNumber.trim().toUpperCase() : t.id));
+                            const cloudIdSet = new Set(cloudTxs.map(t => t.id));
+                            
+                            // Hanya pertahankan data lokal yang belum sempat tersinkron ke cloud
+                            const localOnly = prev.filter(p => {
+                                const inv = p.invoiceNumber ? p.invoiceNumber.trim().toUpperCase() : null;
+                                if (inv && cloudInvoiceSet.has(inv)) return false;
+                                if (p.id && cloudIdSet.has(p.id)) return false;
+                                return true;
                             });
-                            return Array.from(map.values()).sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+                            const combined = [...cloudTxs, ...localOnly];
+                            return combined.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
                         });
 
                         setSyncStatus({ state: 'success', msg: `Terhubung Realtime DB (${cloudTxs.length} data di Cloud)` });
@@ -589,10 +593,66 @@
                 showToastNotification('Transaksi berhasil dicatat!');
             };
 
-            const handleDeleteTransaction = async (id) => {
-                setTransactions(prev => prev.filter(t => t.id !== id));
+            const handleDeleteTransaction = async (txToDelete) => {
+                if (!txToDelete) return;
+                const targetId = typeof txToDelete === 'object' ? txToDelete.id : txToDelete;
+                const targetFbKey = typeof txToDelete === 'object' ? txToDelete.fbKey : null;
+                const targetInvoice = typeof txToDelete === 'object' ? txToDelete.invoiceNumber : null;
+
+                // 1. Hapus dari state lokal & localStorage
+                setTransactions(prev => {
+                    const next = prev.filter(t => {
+                        if (targetId && t.id === targetId) return false;
+                        if (targetFbKey && t.fbKey === targetFbKey) return false;
+                        if (targetInvoice && t.invoiceNumber && t.invoiceNumber.trim().toUpperCase() === targetInvoice.trim().toUpperCase()) return false;
+                        return true;
+                    });
+                    localStorage.setItem('etoll_transactions', JSON.stringify(next));
+                    return next;
+                });
                 setDeletingTx(null);
-                showToastNotification('Transaksi dihapus. Nomor invoice kini terbebas dan dapat di-scan kembali.', 'info');
+
+                // 2. Hapus node terkait dari Firebase Realtime Database jika terhubung ke cloud
+                if (firebaseProjectId) {
+                    try {
+                        const targetPid = firebaseProjectId.trim();
+                        const keysToDelete = [];
+                        if (targetFbKey) keysToDelete.push(targetFbKey);
+                        if (targetId && targetId !== targetFbKey) keysToDelete.push(targetId);
+
+                        const primaryUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/etoll_transactions.json`;
+                        const fallbackUrl = `https://${targetPid}.firebaseio.com/etoll_transactions.json`;
+
+                        let res = await fetch(primaryUrl);
+                        if (!res.ok) res = await fetch(fallbackUrl);
+                        if (res.ok) {
+                            const cloudData = await res.json();
+                            if (cloudData && typeof cloudData === 'object') {
+                                Object.keys(cloudData).forEach(k => {
+                                    const item = cloudData[k];
+                                    if (k === targetId || k === targetFbKey || item.id === targetId || 
+                                        (targetInvoice && item.invoiceNumber && item.invoiceNumber.trim().toUpperCase() === targetInvoice.trim().toUpperCase())) {
+                                        if (!keysToDelete.includes(k)) keysToDelete.push(k);
+                                    }
+                                });
+                            }
+                        }
+
+                        // Eksekusi DELETE untuk setiap key yang cocok di Firebase
+                        for (const key of keysToDelete) {
+                            const delPrimary = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/etoll_transactions/${key}.json`;
+                            const delFallback = `https://${targetPid}.firebaseio.com/etoll_transactions/${key}.json`;
+                            let delRes = await fetch(delPrimary, { method: 'DELETE' });
+                            if (!delRes.ok) {
+                                await fetch(delFallback, { method: 'DELETE' });
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Gagal menghapus data dari Cloud Database:", e);
+                    }
+                }
+
+                showToastNotification('Transaksi berhasil dihapus secara permanen dari Lokal & Cloud!', 'info');
             };
 
             const handleExportExcel = () => {
@@ -1418,14 +1478,14 @@
                                 <div>
                                     <h4 className="font-extrabold text-base text-white">Hapus Transaksi Ini?</h4>
                                     <p className="text-xs text-slate-400 mt-1.5 leading-relaxed text-wrap-safe">
-                                        Invoice <span className="font-mono font-bold text-slate-200">{deletingTx.invoiceNumber}</span> akan dihapus. Nomor invoice ini kini akan terbebas dan dapat di-scan kembali.
+                                        Invoice <span className="font-mono font-bold text-slate-200">{deletingTx.invoiceNumber}</span> akan dihapus dari penyimpanan lokal dan Firebase Cloud Database.
                                     </p>
                                 </div>
                                 <div className="flex gap-2.5">
                                     <button onClick={() => setDeletingTx(null)} className="flex-1 py-3 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800 transition">
                                         Batal
                                     </button>
-                                    <button onClick={() => handleDeleteTransaction(deletingTx.id)} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/25 transition">
+                                    <button onClick={() => handleDeleteTransaction(deletingTx)} className="flex-1 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-rose-600/25 transition">
                                         Ya, Hapus
                                     </button>
                                 </div>
