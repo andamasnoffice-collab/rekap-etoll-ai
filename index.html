@@ -835,7 +835,7 @@
                     index + 1,
                     t.date,
                     `"${(t.merchant || '').replace(/"/g, '""')}"`,
-                    `"${t.etollNumber}"`,
+                    `"${formatCardNumber(t.etollNumber)}"`,
                     `"${t.invoiceNumber}"`,
                     t.amount,
                     `"${t.source || 'Web Scan'}"`
@@ -858,6 +858,29 @@
                 const totalSpent = filteredTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
                 const balance = currentDeposit - totalSpent;
 
+                // Agregasi akumulasi total nominal per kartu e-Toll
+                const cardSummaryMap = {};
+                filteredTransactions.forEach(t => {
+                    const formattedNum = formatCardNumber(t.etollNumber);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    if (cleanNum) {
+                        if (!cardSummaryMap[cleanNum]) {
+                            const registeredCard = cards.find(c => formatCardNumber(c.number).replace(/\D/g, '') === cleanNum);
+                            const detected = detectBankFromCardNumber(formattedNum, t.merchant);
+                            cardSummaryMap[cleanNum] = {
+                                label: registeredCard ? registeredCard.label : detected.label,
+                                bank: registeredCard ? registeredCard.bank : detected.bank,
+                                number: formattedNum,
+                                count: 0,
+                                total: 0
+                            };
+                        }
+                        cardSummaryMap[cleanNum].count += 1;
+                        cardSummaryMap[cleanNum].total += Number(t.amount || 0);
+                    }
+                });
+                const cardSummaryList = Object.values(cardSummaryMap).sort((a, b) => b.total - a.total);
+
                 const wb = XLSX.utils.book_new();
                 
                 const data = [
@@ -872,30 +895,29 @@
                     [balance >= 0 ? "Sisa Deposit (Pengembalian)" : "Kurang Bayar (Reimbursement)", Math.abs(balance)],
                     ["Terbilang Realisasi", terbilangRupiah(totalSpent)],
                     [""],
-                    ["RINCIAN TRANSAKSI E-TOLL"],
-                    ["No", "Tanggal", "Merchant / Pembelian", "Nomor Card e-Toll", "No. Invoice / Resi", "Nominal (Rp)", "Sumber Data"]
+                    ["REKAPITULASI PENGGUNAAN PER KARTU E-TOLL"],
+                    ["No", "Label / Nama Kartu", "Bank / Penerbit", "Nomor Card e-Toll", "Jumlah Transaksi", "Total Nominal (Rp)"]
                 ];
 
-                filteredTransactions.forEach((t, idx) => {
+                cardSummaryList.forEach((c, idx) => {
                     data.push([
                         idx + 1,
-                        t.date,
-                        t.merchant,
-                        t.etollNumber,
-                        t.invoiceNumber,
-                        Number(t.amount || 0),
-                        t.source || 'Web Scan'
+                        c.label,
+                        c.bank,
+                        c.number,
+                        c.count,
+                        c.total
                     ]);
                 });
 
-                data.push(["", "", "", "", "TOTAL REALISASI:", totalSpent, ""]);
+                data.push(["", "", "", "TOTAL REALISASI:", `${filteredTransactions.length} Transaksi`, totalSpent]);
 
                 const ws = XLSX.utils.aoa_to_sheet(data);
-                ws['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 28 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 16 }];
+                ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 20 }];
 
                 XLSX.utils.book_append_sheet(wb, ws, "Rekap_SPJ_eToll");
                 XLSX.writeFile(wb, `Rekap_SPJ_eToll_${selectedMonth}.xlsx`);
-                showToastNotification("Berkas Excel (.xlsx) berhasil diunduh!");
+                showToastNotification("Berkas Excel Rekap Per Kartu (.xlsx) berhasil diunduh!");
             };
 
             const handleSaveCloudSettings = async () => {
