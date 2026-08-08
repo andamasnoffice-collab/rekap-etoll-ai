@@ -60,14 +60,14 @@
         }
 
         .glass-panel {
-            background: rgba(15, 23, 42, 0.75);
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .glass-card {
-            background: rgba(30, 41, 59, 0.6);
+            background: rgba(30, 41, 59, 0.65);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.07);
@@ -78,10 +78,23 @@
         .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 8px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 1); }
 
+        /* Print Media Styles Fix */
         @media print {
-            .no-print { display: none !important; }
-            body { background: white !important; color: black !important; }
-            .print-container { width: 100% !important; margin: 0 !important; padding: 0 !important; }
+            .no-print, header, nav, button, .modal-backdrop { display: none !important; }
+            body { background: white !important; color: black !important; background-image: none !important; }
+            #root { padding: 0 !important; margin: 0 !important; }
+            .print-container { 
+                position: absolute !important;
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important; 
+                margin: 0 !important; 
+                padding: 15px !important; 
+                box-shadow: none !important;
+                border: none !important;
+                background: white !important;
+                color: black !important;
+            }
         }
     </style>
 </head>
@@ -106,19 +119,23 @@
             return cleaned.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
         }
 
+        // Fixed Terbilang Rupiah Logic (Handles Seratus, Seribu, & Triliun correctly)
         function terbilangRupiah(num) {
             const angka = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
-            num = Math.floor(Math.abs(num || 0));
+            num = Math.floor(Math.abs(Number(num) || 0));
             if (num === 0) return "Nol Rupiah";
+
             function terbilang(n) {
                 if (n < 12) return angka[n];
                 if (n < 20) return terbilang(n - 10) + " Belas";
-                if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh " + terbilang(n % 10);
-                if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus " + terbilang(n % 100);
-                if (n < 2000) return "Seribu " + terbilang(n - 1000);
-                if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu " + terbilang(n % 1000);
-                if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta " + terbilang(n % 1000000);
-                return terbilang(Math.floor(n / 1000000000)) + " Milyar " + terbilang(n % 1000000000);
+                if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh " + (n % 10 !== 0 ? terbilang(n % 10) : "");
+                if (n < 200) return "Seratus " + (n - 100 !== 0 ? terbilang(n - 100) : "");
+                if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus " + (n % 100 !== 0 ? terbilang(n % 100) : "");
+                if (n < 2000) return "Seribu " + (n - 1000 !== 0 ? terbilang(n - 1000) : "");
+                if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu " + (n % 1000 !== 0 ? terbilang(n % 1000) : "");
+                if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta " + (n % 1000000 !== 0 ? terbilang(n % 1000000) : "");
+                if (n < 1000000000000) return terbilang(Math.floor(n / 1000000000)) + " Milyar " + (n % 1000000000 !== 0 ? terbilang(n % 1000000000) : "");
+                return terbilang(Math.floor(n / 1000000000000)) + " Triliun " + (n % 1000000000000 !== 0 ? terbilang(n % 1000000000000) : "");
             }
             return terbilang(num).replace(/\s+/g, ' ').trim() + " Rupiah";
         }
@@ -127,23 +144,18 @@
             const clean = (cardNum || '').replace(/\D/g, '');
             const m = (merchant || '').toLowerCase();
             
-            // Mandiri e-Money
             if (clean.startsWith('6032') || clean.startsWith('6087') || clean.startsWith('6031') || clean.startsWith('5899') || clean.startsWith('6035') || m.includes('mandiri') || m.includes('e-money') || m.includes('livin')) {
                 return { bank: 'Mandiri', color: 'from-blue-600 via-indigo-700 to-blue-900', label: 'Mandiri e-Money' };
             }
-            // BCA Flazz
             if (clean.startsWith('6013') || clean.startsWith('6019') || clean.startsWith('6014') || clean.startsWith('6015') || m.includes('bca') || m.includes('flazz')) {
                 return { bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950', label: 'BCA Flazz' };
             }
-            // BRI Brizzi
             if (clean.startsWith('6018') || clean.startsWith('5379') || clean.startsWith('5221') || m.includes('bri') || m.includes('brizzi')) {
                 return { bank: 'BRI', color: 'from-cyan-600 via-blue-800 to-blue-950', label: 'BRI Brizzi' };
             }
-            // BNI TapCash
             if (clean.startsWith('1515') || clean.startsWith('7546') || clean.startsWith('5401') || m.includes('bni') || m.includes('tapcash')) {
                 return { bank: 'BNI', color: 'from-amber-600 via-orange-700 to-slate-900', label: 'BNI TapCash' };
             }
-            // Bank DKI JakCard
             if (clean.startsWith('6030') || m.includes('jakcard') || m.includes('dki')) {
                 return { bank: 'Bank DKI', color: 'from-emerald-600 via-teal-700 to-slate-900', label: 'DKI JakCard' };
             }
@@ -180,42 +192,67 @@
                 base64Data = match[2];
             }
 
-            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice/struk e-Toll Indonesia (e-Money, BCA Flazz, Brizzi, Tapcash, Livin, Tokopedia, Indomaret, dll). Ekstrak data secara tepat.";
-            const userPrompt = "Analisis foto struk ini. Ekstrak:\n1. etollNumber: 16-digit nomor kartu e-Toll\n2. merchant: Tempat/Aplikasi pembelian\n3. amount: Total nominal (angka)\n4. invoiceNumber: Nomor resi / invoice / referensi\n5. date: Tanggal transaksi (YYYY-MM-DD)";
-            
-            const apiKey = userApiKey || "";
+            const apiKey = (userApiKey || "").trim();
             if (!apiKey) {
-                throw new Error("API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda di tab Integrasi.");
+                throw new Error("API Key Gemini belum diatur. Silakan masukkan API Key Gemini Anda.");
             }
 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice/struk e-Toll Indonesia (e-Money, BCA Flazz, Brizzi, Tapcash, Livin, Tokopedia, Indomaret, dll). Ekstrak data secara tepat.";
+            const userPrompt = "Analisis foto struk ini. Ekstrak:\n1. etollNumber: 16-digit nomor kartu e-Toll\n2. merchant: Tempat/Aplikasi pembelian\n3. amount: Total nominal (angka murni tanpa titik/koma)\n4. invoiceNumber: Nomor resi / invoice / referensi\n5. date: Tanggal transaksi (YYYY-MM-DD)";
 
-            const payload = {
-                contents: [{ role: "user", parts: [{ text: userPrompt }, { inlineData: { mimeType, data: base64Data } }] }],
-                systemInstruction: { parts: [{ text: systemPrompt }] },
-                generationConfig: {
-                    responseMimeType: "application/json",
-                    responseSchema: {
-                        type: "OBJECT",
-                        properties: {
-                            etollNumber: { type: "STRING" },
-                            merchant: { type: "STRING" },
-                            amount: { type: "NUMBER" },
-                            invoiceNumber: { type: "STRING" },
-                            date: { type: "STRING" }
-                        },
-                        required: ["etollNumber", "merchant", "amount", "invoiceNumber", "date"]
+            // Primary model endpoint with fallback support
+            const modelNames = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"];
+            let lastError = null;
+
+            for (const model of modelNames) {
+                try {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{ role: "user", parts: [{ text: userPrompt }, { inlineData: { mimeType, data: base64Data } }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    etollNumber: { type: "STRING" },
+                                    merchant: { type: "STRING" },
+                                    amount: { type: "NUMBER" },
+                                    invoiceNumber: { type: "STRING" },
+                                    date: { type: "STRING" }
+                                },
+                                required: ["etollNumber", "merchant", "amount", "invoiceNumber", "date"]
+                            }
+                        }
+                    };
+
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) {
+                        const errJson = await response.json().catch(() => ({}));
+                        throw new Error(errJson.error?.message || `HTTP ${response.status} pada model ${model}`);
                     }
-                }
-            };
 
-            const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            if (!response.ok) {
-                const errJson = await response.json().catch(() => ({}));
-                throw new Error(errJson.error?.message || "Gagal memproses OCR via Gemini API.");
+                    const result = await response.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) {
+                        throw new Error("Respons AI kosong atau diblokir oleh filter keamanan.");
+                    }
+
+                    // Clean markdown codeblocks if present
+                    const cleanJsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJsonStr);
+
+                    if (parsed.amount) {
+                        parsed.amount = parseFloat(String(parsed.amount).replace(/[^0-9.]/g, '')) || 0;
+                    }
+                    return parsed;
+                } catch (err) {
+                    console.warn(`Attempt with ${model} failed:`, err.message);
+                    lastError = err;
+                }
             }
-            const result = await response.json();
-            return JSON.parse(result.candidates[0].content.parts[0].text);
+
+            throw lastError || new Error("Gagal memproses OCR via Gemini API.");
         }
 
         const INITIAL_CARDS = [
@@ -233,7 +270,7 @@
 
         const currentYearMonth = new Date().toISOString().substring(0, 7);
 
-        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard }) {
+        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers }) {
             const [securityModal, setSecurityModal] = React.useState(null);
             const [passwordInput, setPasswordInput] = React.useState('');
             const [passError, setPassError] = React.useState('');
@@ -253,7 +290,11 @@
                 const { type, payload } = securityModal;
 
                 if (type === 'DELETE_CARD') {
+                    const cleanNum = (payload.number || '').replace(/\D/g, '');
                     setCards(prev => prev.filter(c => c.id !== payload.id));
+                    if (cleanNum) {
+                        setDeletedCardNumbers(prev => [...prev, cleanNum]);
+                    }
                     showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
                 } else if (type === 'RESET_LOCAL') {
                     setTransactions([]);
@@ -263,9 +304,11 @@
                     setTransactions([]);
                     setCards(INITIAL_CARDS);
                     setMonthlyDeposits({});
+                    setDeletedCardNumbers([]);
                     localStorage.removeItem('etoll_transactions');
                     localStorage.removeItem('etoll_cards');
                     localStorage.removeItem('etoll_monthly_deposits');
+                    localStorage.removeItem('etoll_deleted_cards');
 
                     if (firebaseProjectId) {
                         try {
@@ -359,6 +402,7 @@
                                             <option value="BCA">BCA Flazz</option>
                                             <option value="BRI">BRI Brizzi</option>
                                             <option value="BNI">BNI TapCash</option>
+                                            <option value="Bank DKI">Bank DKI JakCard</option>
                                         </select>
                                     </div>
                                 </div>
@@ -484,7 +528,7 @@
 
                     {/* SECURITY PASSWORD CONFIRMATION MODAL */}
                     {securityModal && (
-                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
+                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md modal-backdrop">
                             <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-rose-800/80">
                                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                                     <h3 className="font-extrabold text-base flex items-center gap-2 text-rose-400">
@@ -544,6 +588,7 @@
 
         function App() {
             const [cards, setCards] = React.useState(() => JSON.parse(localStorage.getItem('etoll_cards')) || INITIAL_CARDS);
+            const [deletedCardNumbers, setDeletedCardNumbers] = React.useState(() => JSON.parse(localStorage.getItem('etoll_deleted_cards')) || []);
             const [transactions, setTransactions] = React.useState(() => JSON.parse(localStorage.getItem('etoll_transactions')) || INITIAL_DUMMY_TXS);
             const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
             const [tempFbPid, setTempFbPid] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
@@ -594,10 +639,11 @@
             const [showNfcModal, setShowNfcModal] = React.useState(false);
             const [showSpjPrintModal, setShowSpjPrintModal] = React.useState(false);
             const [deletingTx, setDeletingTx] = React.useState(null);
+            const [editingTx, setEditingTx] = React.useState(null);
             const [inspectingTx, setInspectingTx] = React.useState(null);
             const [toast, setToast] = React.useState(null);
 
-            const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: '' });
+            const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
             const [isSyncing, setIsSyncing] = React.useState(false);
 
             const fetchCloudData = React.useCallback(async (pidOverride = null) => {
@@ -623,9 +669,9 @@
                         }));
 
                         setTransactions(cloudTxs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
-                        setSyncStatus({ state: 'success', msg: `Terhubung Realtime DB (${cloudTxs.length} data di Cloud)` });
+                        setSyncStatus({ state: 'success', msg: `Terhubung Realtime DB (${cloudTxs.length} data Cloud)` });
                     } else {
-                        setSyncStatus({ state: 'success', msg: 'Terhubung ke Firebase' });
+                        setSyncStatus({ state: 'success', msg: 'Terhubung ke Firebase (Database Kosong)' });
                     }
                 } catch (e) {
                     console.warn("Cloud Sync Error:", e);
@@ -644,13 +690,13 @@
             }, [firebaseProjectId, fetchCloudData]);
 
             React.useEffect(() => { localStorage.setItem('etoll_cards', JSON.stringify(cards)); }, [cards]);
+            React.useEffect(() => { localStorage.setItem('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
             React.useEffect(() => { localStorage.setItem('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
             React.useEffect(() => { localStorage.setItem('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
             React.useEffect(() => { localStorage.setItem('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
             React.useEffect(() => { localStorage.setItem('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
             React.useEffect(() => { localStorage.setItem('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
 
-            // Auto Card Registration upon new transaction detection
             React.useEffect(() => {
                 if (!transactions || transactions.length === 0) return;
                 
@@ -663,6 +709,8 @@
                         if (!formattedNum) return;
 
                         const cleanNum = formattedNum.replace(/\D/g, '');
+                        if (deletedCardNumbers.includes(cleanNum)) return;
+
                         const exists = updatedCards.some(c => (c.number || '').replace(/\D/g, '') === cleanNum);
                         
                         if (!exists) {
@@ -681,7 +729,7 @@
 
                     return hasNewCard ? updatedCards : prevCards;
                 });
-            }, [transactions]);
+            }, [transactions, deletedCardNumbers]);
 
             const showToastNotification = (msg, type = 'success') => {
                 setToast({ msg, type });
@@ -703,6 +751,9 @@
                 const formattedNum = formatCardNumber(newCardData.number);
                 if (!formattedNum) return null;
                 const cleanNum = formattedNum.replace(/\D/g, '');
+                
+                setDeletedCardNumbers(prev => prev.filter(n => n !== cleanNum));
+
                 const existing = cards.find(c => (c.number || '').replace(/\D/g, '') === cleanNum);
                 if (existing) return existing;
 
@@ -755,6 +806,7 @@
                 }
 
                 setShowScanModal(false);
+                setEditingTx(null);
                 showToastNotification('Transaksi berhasil dicatat!');
             };
 
@@ -951,17 +1003,61 @@
                     }
                 });
 
-                const list = Object.values(cardMap);
+                const list = Object.values(cardMap).filter(item => item.total > 0);
                 list.sort((a, b) => b.total - a.total);
                 return list;
             }, [cards, filteredTransactions]);
+
+            const grandTotalSpent = React.useMemo(() => {
+                return transactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+            }, [transactions]);
+
+            const overallCardBreakdown = React.useMemo(() => {
+                const cardMap = {};
+
+                cards.forEach(c => {
+                    const formattedNum = formatCardNumber(c.number);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    cardMap[cleanNum] = {
+                        id: c.id,
+                        label: c.label,
+                        bank: c.bank,
+                        number: formattedNum,
+                        total: 0,
+                        count: 0
+                    };
+                });
+
+                transactions.forEach(t => {
+                    const formattedNum = formatCardNumber(t.etollNumber);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    if (cleanNum) {
+                        if (!cardMap[cleanNum]) {
+                            const detected = detectBankFromCardNumber(formattedNum, t.merchant);
+                            cardMap[cleanNum] = {
+                                id: 'unregistered-' + cleanNum,
+                                label: `${detected.label} (${cleanNum.slice(-4) || 'e-Toll'})`,
+                                bank: detected.bank,
+                                number: formattedNum,
+                                total: 0,
+                                count: 0
+                            };
+                        }
+                        cardMap[cleanNum].total += Number(t.amount || 0);
+                        cardMap[cleanNum].count += 1;
+                    }
+                });
+
+                const list = Object.values(cardMap);
+                list.sort((a, b) => b.total - a.total);
+                return list;
+            }, [cards, transactions]);
 
             const activeDeposit = monthlyDeposits[selectedMonth] || 0;
             const depositBalance = activeDeposit - monthTotalSpent;
 
             return (
                 <div className="min-h-screen flex flex-col relative overflow-hidden">
-                    {}
                     <header className="sticky top-0 z-40 glass-panel border-b border-slate-800 shadow-xl">
                         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
                             <div className="flex items-center gap-3">
@@ -971,8 +1067,16 @@
                                 <div>
                                     <h1 className="font-black text-xl bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
                                         RekapToll
-                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                            Cloud Synced
+                                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                                            syncStatus.state === 'success' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                            syncStatus.state === 'error' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                                            'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                        }`} title={syncStatus.msg}>
+                                            <span className={`w-2 h-2 rounded-full ${
+                                                syncStatus.state === 'success' ? 'bg-emerald-400 animate-pulse' :
+                                                syncStatus.state === 'error' ? 'bg-rose-400' : 'bg-sky-400 animate-spin'
+                                            }`}></span>
+                                            <span>{syncStatus.state === 'success' ? 'Cloud Synced' : syncStatus.state === 'error' ? 'Sync Error' : 'Connecting...'}</span>
                                         </span>
                                     </h1>
                                 </div>
@@ -990,6 +1094,7 @@
                             </div>
                         </div>
 
+                        {/* Navigation Tabs */}
                         <div className="max-w-7xl mx-auto px-4 flex space-x-2 border-t border-slate-800/80 overflow-x-auto custom-scrollbar">
                             <button onClick={() => setActiveTab('dashboard')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'dashboard' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
                                 <i className="fa-solid fa-chart-pie"></i> Dasbor & Visual Analytics
@@ -1011,15 +1116,14 @@
 
                     {toast && (
                         <div className="fixed bottom-5 right-5 z-50 animate-bounce">
-                            <div className="px-4 py-3 rounded-2xl bg-slate-900/90 border border-slate-700 text-white flex items-center gap-3 text-xs font-medium shadow-2xl backdrop-blur-md">
-                                <i className="fa-solid fa-circle-check text-emerald-400 text-sm"></i>
+                            <div className="px-4 py-3 rounded-2xl bg-slate-900/95 border border-slate-700 text-white flex items-center gap-3 text-xs font-medium shadow-2xl backdrop-blur-md">
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-xmark text-rose-400' : 'fa-circle-check text-emerald-400'} text-sm`}></i>
                                 <span>{toast.msg}</span>
                             </div>
                         </div>
                     )}
 
                     <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
-                        {}
                         {activeTab === 'dashboard' && (
                             <div className="space-y-6">
                                 {/* STAT CARDS GRID */}
@@ -1088,21 +1192,24 @@
                                         <h3 className="text-2xl font-black text-white mt-2">
                                             {(dailyUsage.bytes / (1024 * 1024)).toFixed(2)} <span className="text-sm font-bold text-slate-400">MB</span>
                                         </h3>
-                                        <p className="text-[11px] text-emerald-400 font-bold mt-1">
+                                        <p className="text-[11px] text-emerald-400 font-bold mt-1 flex items-center gap-1">
                                             <i className="fa-solid fa-shield-halved"></i> Realtime Sync Cloud Active
                                         </p>
                                     </div>
                                 </div>
 
-                                {/* ANALISIS & TOTAL TOP UP SETIAP KARTU E-TOLL */}
+                                {/* DIAGRAM DISTRIBUSI TOP UP KARTU BULAN INI */}
                                 <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6">
                                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800">
                                         <div>
                                             <h3 className="font-extrabold text-base text-white flex items-center gap-2">
-                                                <i className="fa-solid fa-credit-card text-brand-400"></i>
-                                                <span>Analisis Penggunaan Kartu e-Toll</span>
+                                                <i className="fa-solid fa-chart-column text-brand-400"></i>
+                                                <span>Analisis Diagram Penggunaan Kartu e-Toll</span>
+                                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-300 font-bold border border-slate-700">
+                                                    {cardBreakdown.length} Kartu Aktif
+                                                </span>
                                             </h3>
-                                            <p className="text-xs text-slate-400 mt-0.5">Akumulasi top up dan statistik transaksi kartu di bulan {selectedMonth === 'ALL' ? 'Semua Periode' : selectedMonth}</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Diagram distribusi top up kartu yang bertransaksi pada {selectedMonth === 'ALL' ? 'Semua Periode' : `Bulan ${selectedMonth}`}</p>
                                         </div>
                                         <select
                                             value={selectedMonth}
@@ -1117,118 +1224,54 @@
                                     </div>
 
                                     {cardBreakdown.length === 0 ? (
-                                        <div className="p-8 text-center text-slate-500 text-xs">
-                                            Belum ada data transaksi kartu di bulan ini untuk dianalisis.
+                                        <div className="p-8 text-center text-slate-500 text-xs space-y-2">
+                                            <i className="fa-solid fa-chart-line text-3xl text-slate-600"></i>
+                                            <p className="font-bold text-slate-400">Tidak ada kartu yang melakukan top up di bulan ini.</p>
+                                            <p className="text-[11px] text-slate-500">Pilih periode lain atau catat transaksi baru untuk melihat diagram analisis.</p>
                                         </div>
                                     ) : (
-                                        <div className="space-y-6">
-                                            {/* TOTAL TOP UP PER KARTU (BULAN BERJALAN) */}
-                                            <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800/90 space-y-4">
-                                                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-800 pb-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs">
-                                                            <i className="fa-solid fa-wallet"></i>
-                                                        </div>
-                                                        <div>
-                                                            <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">
-                                                                Total Top Up Per Kartu, Per Bulan Berjalan (Urutan Terbanyak)
-                                                            </h4>
-                                                            <p className="text-[10px] text-slate-400">Periode: {selectedMonth === 'ALL' ? 'Semua Periode' : selectedMonth}</p>
-                                                        </div>
-                                                    </div>
-                                                    <span className="text-[11px] font-mono font-bold px-3 py-1 rounded-xl bg-slate-950 text-emerald-400 border border-slate-800 self-start sm:self-auto">
-                                                        Total Bulan Ini: {formatRupiah(monthTotalSpent)}
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
-                                                    {cardBreakdown.map((item, idx) => {
-                                                        const percent = monthTotalSpent > 0 ? ((item.total / monthTotalSpent) * 100).toFixed(1) : 0;
-                                                        return (
-                                                            <div key={idx} className="p-2.5 bg-slate-950/70 rounded-xl border border-slate-800 space-y-1.5 relative overflow-hidden group hover:border-brand-500/40 transition">
-                                                                <div className="flex justify-between items-start gap-1">
-                                                                    <div className="flex items-center gap-1.5 min-w-0">
-                                                                        <div className="w-6 h-6 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                                                            <i className="fa-solid fa-credit-card"></i>
-                                                                        </div>
-                                                                        <div className="min-w-0">
-                                                                            <p className="text-[11px] font-extrabold text-white truncate" title={item.label}>{item.label}</p>
-                                                                            <p className="text-[9px] text-slate-400 font-mono truncate">{item.number}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 shrink-0">
-                                                                        {item.count} Tx
-                                                                    </span>
-                                                                </div>
-
-                                                                <div className="pt-1.5 border-t border-slate-800/80 flex justify-between items-baseline">
-                                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">Top Up:</span>
-                                                                    <span className="text-xs font-black text-brand-300 font-mono">{formatRupiah(item.total)}</span>
-                                                                </div>
-
-                                                                <div className="space-y-0.5">
-                                                                    <div className="flex justify-between text-[9px] font-bold text-slate-400">
-                                                                        <span>Porsi</span>
-                                                                        <span className="text-emerald-400 font-mono">{percent}%</span>
-                                                                    </div>
-                                                                    <div className="w-full bg-slate-900 h-1.5 rounded-full overflow-hidden border border-slate-800">
-                                                                        <div 
-                                                                            className="h-full bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
-                                                                            style={{ width: `${percent}%` }}
-                                                                        ></div>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
+                                        <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-4">
+                                            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+                                                <h4 className="text-xs font-extrabold text-white uppercase tracking-wider flex items-center gap-2">
+                                                    <i className="fa-solid fa-chart-simple text-emerald-400"></i>
+                                                    <span>Diagram Distribusi Top Up Kartu Bulan Ini</span>
+                                                </h4>
+                                                <span className="text-xs font-mono font-black text-brand-300">
+                                                    Total: {formatRupiah(monthTotalSpent)}
+                                                </span>
                                             </div>
 
-                                            {/* BREAKDOWN TABLE */}
-                                            <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800 shadow-lg">
-                                                <table className="w-full text-left text-xs border-collapse">
-                                                    <thead>
-                                                        <tr className="bg-slate-900/90 text-slate-400 uppercase font-extrabold text-[10px] tracking-wider border-b border-slate-800">
-                                                            <th className="py-3.5 px-4">Nama / Label Kartu</th>
-                                                            <th className="py-3.5 px-4">Nomor e-Toll</th>
-                                                            <th className="py-3.5 px-4 text-center">Frekuensi</th>
-                                                            <th className="py-3.5 px-4 text-right">Total Top Up (Rp)</th>
-                                                            <th className="py-3.5 px-4 text-right">Porsi</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-slate-800/80 font-medium">
-                                                        {cardBreakdown.map((item, idx) => {
-                                                            const percent = monthTotalSpent > 0 ? ((item.total / monthTotalSpent) * 100).toFixed(1) : 0;
-                                                            return (
-                                                                <tr key={idx} className="hover:bg-slate-800/50 transition">
-                                                                    <td className="py-3 px-4 font-bold text-white">
-                                                                        <div className="flex items-center gap-2">
-                                                                            <div className="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-xs">
-                                                                                <i className="fa-solid fa-id-card"></i>
-                                                                            </div>
-                                                                            <div>
-                                                                                <span>{item.label}</span>
-                                                                                <span className="block text-[10px] text-slate-400 font-normal">{item.bank}</span>
-                                                                            </div>
-                                                                        </div>
-                                                                    </td>
-                                                                    <td className="py-3 px-4 font-mono font-semibold text-slate-300">
-                                                                        {item.number}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-center font-bold text-slate-300">
-                                                                        {item.count} Tx
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-right font-black text-brand-300">
-                                                                        {formatRupiah(item.total)}
-                                                                    </td>
-                                                                    <td className="py-3 px-4 text-right font-mono font-bold text-emerald-400">
-                                                                        {percent}%
-                                                                    </td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                    </tbody>
-                                                </table>
+                                            <div className="space-y-4">
+                                                {cardBreakdown.map((item, idx) => {
+                                                    const percent = monthTotalSpent > 0 ? ((item.total / monthTotalSpent) * 100).toFixed(1) : 0;
+                                                    const cardInfo = detectBankFromCardNumber(item.number, item.label);
+                                                    
+                                                    return (
+                                                        <div key={idx} className="space-y-1.5 p-3 bg-slate-950/60 rounded-xl border border-slate-800/80 hover:border-brand-500/40 transition">
+                                                            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-1 text-xs">
+                                                                <div className="flex items-center gap-2 min-w-0">
+                                                                    <span className="w-5 h-5 rounded-md bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                                                        {idx + 1}
+                                                                    </span>
+                                                                    <span className="font-extrabold text-white truncate" title={item.label}>{item.label}</span>
+                                                                    <span className="text-[10px] text-slate-400 font-mono">({item.number})</span>
+                                                                </div>
+                                                                <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                                                                    <span className="text-[11px] font-bold text-slate-400">{item.count} Tx</span>
+                                                                    <span className="text-xs font-black text-brand-300 font-mono">{formatRupiah(item.total)}</span>
+                                                                    <span className="text-xs font-bold text-emerald-400 font-mono min-w-[45px] text-right">{percent}%</span>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="w-full bg-slate-900 h-3 rounded-full overflow-hidden border border-slate-800 flex">
+                                                                <div 
+                                                                    className={`h-full bg-gradient-to-r ${cardInfo.color || 'from-blue-500 to-indigo-600'} rounded-full transition-all duration-700 shadow-sm`}
+                                                                    style={{ width: `${percent}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         </div>
                                     )}
@@ -1238,7 +1281,7 @@
                                 <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                                            <i className="fa-solid fa-credit-card text-brand-400"></i> Kartu e-Toll Terdaftar
+                                            <i className="fa-solid fa-credit-card text-brand-400"></i> Kartu e-Toll Terdaftar (Urut Pengisian Terbanyak)
                                         </h3>
                                         <button onClick={() => setShowNfcModal(true)} className="text-xs font-bold text-purple-400 hover:text-purple-300 hover:underline flex items-center gap-1">
                                             <i className="fa-solid fa-nfc-symbol"></i> Tap NFC Kartu
@@ -1246,12 +1289,16 @@
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {cards.map(card => {
-                                            const cleanCardNum = (card.number || '').replace(/\D/g, '');
-                                            const cardSpent = transactions
-                                                .filter(t => (t.etollNumber || '').replace(/\D/g, '') === cleanCardNum && (selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth))))
-                                                .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-                                            return (
+                                        {[...cards]
+                                            .map(card => {
+                                                const cleanCardNum = (card.number || '').replace(/\D/g, '');
+                                                const cardSpent = transactions
+                                                    .filter(t => (t.etollNumber || '').replace(/\D/g, '') === cleanCardNum && (selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth))))
+                                                    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+                                                return { ...card, cardSpent };
+                                            })
+                                            .sort((a, b) => b.cardSpent - a.cardSpent)
+                                            .map(card => (
                                                 <div key={card.id} className={`p-6 rounded-3xl bg-gradient-to-r ${card.color || 'from-blue-600 via-indigo-700 to-slate-900'} text-white shadow-2xl border border-white/10 relative overflow-hidden group hover:scale-[1.01] transition duration-200`}>
                                                     <div className="flex justify-between items-start relative z-10">
                                                         <div>
@@ -1263,7 +1310,7 @@
                                                     <div className="mt-6 pt-4 border-t border-white/15 flex justify-between items-end relative z-10">
                                                         <div>
                                                             <p className="text-[10px] text-slate-300">Total Pengisian ({selectedMonth}):</p>
-                                                            <p className="text-xl font-black text-amber-300">{formatRupiah(cardSpent)}</p>
+                                                            <p className="text-xl font-black text-amber-300">{formatRupiah(card.cardSpent)}</p>
                                                         </div>
                                                         <button 
                                                             onClick={() => { setSelectedCardFilter(card.number); setActiveTab('transactions'); }}
@@ -1274,14 +1321,76 @@
                                                     </div>
                                                     <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/5 rounded-full blur-2xl group-hover:scale-150 transition"></div>
                                                 </div>
-                                            );
-                                        })}
+                                            ))}
+                                    </div>
+                                </div>
+
+                                {/* TOTAL PEMBELIAN SELURUHNYA PER KARTU (PALING BAWAH) */}
+                                <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6">
+                                    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800/90 space-y-4">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 border-b border-slate-800 pb-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-xl bg-brand-500/20 text-brand-400 flex items-center justify-center font-bold text-xs">
+                                                    <i className="fa-solid fa-wallet"></i>
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs font-extrabold text-white uppercase tracking-wider">
+                                                        Total Pembelian Seluruhnya Per Kartu (Urutan Terbanyak)
+                                                    </h4>
+                                                    <p className="text-[10px] text-slate-400">Akumulasi Total Seluruh Transaksi Pembelian</p>
+                                                </div>
+                                            </div>
+                                            <span className="text-[11px] font-mono font-bold px-3 py-1 rounded-xl bg-slate-950 text-emerald-400 border border-slate-800 self-start sm:self-auto">
+                                                Total Pembelian Seluruhnya: {formatRupiah(grandTotalSpent)}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {overallCardBreakdown.map((item, idx) => {
+                                                const percent = grandTotalSpent > 0 ? ((item.total / grandTotalSpent) * 100).toFixed(1) : 0;
+                                                return (
+                                                    <div key={idx} className="p-5 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-3.5 relative overflow-hidden group hover:border-brand-500/50 transition shadow-md">
+                                                        <div className="flex justify-between items-start gap-2">
+                                                            <div className="flex items-center gap-2.5 min-w-0">
+                                                                <div className="w-9 h-9 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-sm font-bold shrink-0">
+                                                                    <i className="fa-solid fa-credit-card"></i>
+                                                                </div>
+                                                                <div className="min-w-0">
+                                                                    <p className="text-sm font-extrabold text-white truncate" title={item.label}>{item.label}</p>
+                                                                    <p className="text-xs text-slate-400 font-mono truncate">{item.number}</p>
+                                                                </div>
+                                                            </div>
+                                                            <span className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 text-slate-200 border border-slate-700 shrink-0">
+                                                                {item.count} Tx
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="pt-2.5 border-t border-slate-800/80 flex justify-between items-baseline">
+                                                            <span className="text-xs font-bold text-slate-400 uppercase">Total Pembelian:</span>
+                                                            <span className="text-lg font-black text-brand-300 font-mono">{formatRupiah(item.total)}</span>
+                                                        </div>
+
+                                                        <div className="space-y-1">
+                                                            <div className="flex justify-between text-xs font-bold text-slate-400">
+                                                                <span>Porsi Kontribusi</span>
+                                                                <span className="text-emerald-400 font-mono">{percent}%</span>
+                                                            </div>
+                                                            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                                                                <div 
+                                                                    className="h-full bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-400 rounded-full transition-all duration-500"
+                                                                    style={{ width: `${percent}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'transactions' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
@@ -1427,7 +1536,7 @@
                                                             <td className="py-3.5 px-4 whitespace-nowrap text-slate-300 font-bold">
                                                                 <div className="flex items-center gap-2">
                                                                     <i className="fa-regular fa-calendar-check text-slate-500 group-hover:text-brand-400 transition"></i>
-                                                                    <span>{tx.date}</span>
+                                                                    <span>{formatDateIndo(tx.date)}</span>
                                                                 </div>
                                                             </td>
                                                             <td className="py-3.5 px-4">
@@ -1481,6 +1590,13 @@
                                                                         <i className="fa-solid fa-eye"></i>
                                                                     </button>
                                                                     <button 
+                                                                        onClick={() => setEditingTx(tx)} 
+                                                                        className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-950/50 rounded-lg transition"
+                                                                        title="Edit Transaksi"
+                                                                    >
+                                                                        <i className="fa-solid fa-pen-to-square"></i>
+                                                                    </button>
+                                                                    <button 
                                                                         onClick={() => setDeletingTx(tx)} 
                                                                         className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-lg transition"
                                                                         title="Hapus Transaksi"
@@ -1530,7 +1646,7 @@
                                                             <i className={`fa-solid ${badge.icon}`}></i>
                                                             <span>{badge.label}</span>
                                                         </span>
-                                                        <span className="text-[11px] font-bold text-slate-400">{tx.date}</span>
+                                                        <span className="text-[11px] font-bold text-slate-400">{formatDateIndo(tx.date)}</span>
                                                     </div>
 
                                                     <div className="flex justify-between items-center pt-2 border-t border-slate-800">
@@ -1551,7 +1667,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'monthly_recap' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6">
                                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4 border-b border-slate-800">
@@ -1634,7 +1749,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'cloud_config' && (
                             <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5 max-w-3xl mx-auto">
                                 <div className="border-b border-slate-800 pb-3">
@@ -1696,7 +1810,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === 'master_data' && (
                             <MasterDataTab 
                                 cards={cards}
@@ -1708,14 +1821,17 @@
                                 fetchCloudData={fetchCloudData}
                                 showToastNotification={showToastNotification}
                                 handleAddCard={handleAddCard}
+                                deletedCardNumbers={deletedCardNumbers}
+                                setDeletedCardNumbers={setDeletedCardNumbers}
                             />
                         )}
                     </main>
 
-                    {}
+                    {/* MODALS */}
                     {showScanModal && (
                         <ScanAndAddModal 
                             userApiKey={geminiApiKey}
+                            setGeminiApiKey={setGeminiApiKey}
                             checkDuplicateInvoice={checkDuplicateInvoice}
                             cards={cards}
                             onSave={handleSaveTransaction}
@@ -1727,17 +1843,28 @@
                         />
                     )}
 
+                    {editingTx && (
+                        <EditTransactionModal 
+                            transaction={editingTx}
+                            checkDuplicateInvoice={checkDuplicateInvoice}
+                            onSave={handleSaveTransaction}
+                            onClose={() => setEditingTx(null)}
+                        />
+                    )}
+
                     {showNfcModal && (
                         <NfcModal 
                             cards={cards}
+                            setCards={setCards}
                             transactions={transactions}
                             currentMonth={currentYearMonth}
                             onClose={() => setShowNfcModal(false)}
+                            showToastNotification={showToastNotification}
                         />
                     )}
 
                     {inspectingTx && (
-                        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+                        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md modal-backdrop">
                             <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-slate-700">
                                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                                     <h3 className="font-extrabold text-base flex items-center gap-2 text-brand-400">
@@ -1752,7 +1879,7 @@
                                     <div className="p-4 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-2">
                                         <div className="flex justify-between text-slate-400">
                                             <span>Tanggal:</span>
-                                            <span className="font-bold text-white">{inspectingTx.date}</span>
+                                            <span className="font-bold text-white">{formatDateIndo(inspectingTx.date)}</span>
                                         </div>
                                         <div className="flex justify-between text-slate-400">
                                             <span>Merchant:</span>
@@ -1778,15 +1905,23 @@
                                     </div>
                                 </div>
 
-                                <button onClick={() => setInspectingTx(null)} className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-xs text-slate-200 transition">
-                                    Tutup
-                                </button>
+                                <div className="flex gap-2">
+                                    <button 
+                                        onClick={() => { const target = inspectingTx; setInspectingTx(null); setEditingTx(target); }} 
+                                        className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 font-bold rounded-xl text-xs text-white transition flex items-center justify-center gap-1.5"
+                                    >
+                                        <i className="fa-solid fa-pen-to-square"></i> Edit Transaksi
+                                    </button>
+                                    <button onClick={() => setInspectingTx(null)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 font-bold rounded-xl text-xs text-slate-200 transition">
+                                        Tutup
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {deletingTx && (
-                        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
+                        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md modal-backdrop">
                             <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-4 text-center shadow-xl border border-rose-900/60">
                                 <div className="w-12 h-12 rounded-full bg-rose-950 text-rose-400 border border-rose-800 flex items-center justify-center mx-auto text-xl">
                                     <i className="fa-solid fa-trash-can"></i>
@@ -1822,11 +1957,12 @@
             );
         }
 
-        function ScanAndAddModal({ userApiKey, checkDuplicateInvoice, cards, onSave, onClose, showToastNotification, dailyUsage, freeDailyLimit, updateDailyUsage }) {
+        function ScanAndAddModal({ userApiKey, setGeminiApiKey, checkDuplicateInvoice, cards, onSave, onClose, showToastNotification, dailyUsage, freeDailyLimit, updateDailyUsage }) {
             const [selectedImage, setSelectedImage] = React.useState(null);
             const [selectedImageBytes, setSelectedImageBytes] = React.useState(500000);
             const [isScanning, setIsScanning] = React.useState(false);
             const [duplicateWarning, setDuplicateWarning] = React.useState(false);
+            const [allowDuplicateOverride, setAllowDuplicateOverride] = React.useState(false);
             const [modalApiKey, setModalApiKey] = React.useState(userApiKey || '');
 
             const isQuotaExceeded = !modalApiKey && dailyUsage.count >= freeDailyLimit;
@@ -1838,6 +1974,13 @@
                 invoiceNumber: '',
                 date: new Date().toISOString().substring(0, 10)
             });
+
+            const handleSaveApiKey = () => {
+                if (modalApiKey.trim()) {
+                    setGeminiApiKey(modalApiKey.trim());
+                    showToastNotification("API Key Gemini disimpan!");
+                }
+            };
 
             const handleFileSelect = (e) => {
                 const file = e.target.files[0];
@@ -1892,7 +2035,7 @@
 
             const handleSubmit = (e) => {
                 e.preventDefault();
-                if (checkDuplicateInvoice(formData.invoiceNumber)) {
+                if (checkDuplicateInvoice(formData.invoiceNumber) && !allowDuplicateOverride) {
                     setDuplicateWarning(true);
                     return;
                 }
@@ -1900,7 +2043,7 @@
             };
 
             return (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto modal-backdrop">
                     <div className="glass-panel p-6 rounded-3xl max-w-lg w-full space-y-4 my-8 shadow-2xl border border-slate-700">
                         <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                             <h3 className="font-extrabold text-base flex items-center gap-2 text-brand-400">
@@ -1911,11 +2054,27 @@
                             </button>
                         </div>
 
-                        {isQuotaExceeded && (
-                            <div className="p-3 bg-rose-950/60 border border-rose-800 text-rose-200 rounded-xl text-xs">
+                        {(!userApiKey || isQuotaExceeded) && (
+                            <div className="p-3 bg-amber-950/60 border border-amber-800 text-amber-200 rounded-2xl space-y-2 text-xs">
                                 <p className="font-bold flex items-center gap-2">
-                                    <i className="fa-solid fa-triangle-exclamation text-rose-400"></i> Batas Kuota Scan Gratis Hari Ini Tercapai ({freeDailyLimit}/{freeDailyLimit})
+                                    <i className="fa-solid fa-key text-amber-400"></i> API Key Gemini (Bebas Batas Quota)
                                 </p>
+                                <div className="flex gap-2">
+                                    <input 
+                                        type="password" 
+                                        placeholder="Masukkan API Key Gemini AIzaSy..." 
+                                        value={modalApiKey}
+                                        onChange={e => setModalApiKey(e.target.value)}
+                                        className="flex-1 p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-[11px]"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={handleSaveApiKey} 
+                                        className="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs"
+                                    >
+                                        Simpan
+                                    </button>
+                                </div>
                             </div>
                         )}
 
@@ -1951,6 +2110,28 @@
                                     </label>
                                 )}
                             </div>
+
+                            {/* DUPLICATE INVOICE WARNING BANNER */}
+                            {duplicateWarning && (
+                                <div className="p-3 bg-amber-950/80 border border-amber-700/80 rounded-2xl text-amber-200 text-xs space-y-2">
+                                    <div className="flex items-center gap-2 font-bold">
+                                        <i className="fa-solid fa-triangle-exclamation text-amber-400"></i>
+                                        <span>Peringatan: No. Invoice Sudah Ada di Sistem!</span>
+                                    </div>
+                                    <p className="text-[11px] text-slate-300">
+                                        Invoice <span className="font-mono font-bold text-amber-300">{formData.invoiceNumber}</span> pernah dicatat sebelumnya.
+                                    </p>
+                                    <label className="flex items-center gap-2 font-bold text-amber-300 cursor-pointer pt-1">
+                                        <input 
+                                            type="checkbox" 
+                                            checked={allowDuplicateOverride} 
+                                            onChange={e => setAllowDuplicateOverride(e.target.checked)}
+                                            className="rounded border-amber-600 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span>Abaikan & Tetap Simpan Transaksi Duplikat</span>
+                                    </label>
+                                </div>
+                            )}
 
                             <form onSubmit={handleSubmit} className="space-y-3 pt-2">
                                 <div className="grid grid-cols-2 gap-3">
@@ -1995,12 +2176,228 @@
             );
         }
 
-        function NfcModal({ cards, transactions, currentMonth, onClose }) {
+        function EditTransactionModal({ transaction, checkDuplicateInvoice, onSave, onClose }) {
+            const [formData, setFormData] = React.useState({
+                id: transaction.id,
+                etollNumber: formatCardNumber(transaction.etollNumber || ''),
+                merchant: transaction.merchant || '',
+                amount: transaction.amount || '',
+                invoiceNumber: transaction.invoiceNumber || '',
+                date: transaction.date || new Date().toISOString().substring(0, 10),
+                source: transaction.source || 'Web Scan / Manual',
+                createdAt: transaction.createdAt
+            });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                onSave(formData);
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto modal-backdrop">
+                    <div className="glass-panel p-6 rounded-3xl max-w-lg w-full space-y-4 my-8 shadow-2xl border border-slate-700">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                            <h3 className="font-extrabold text-base flex items-center gap-2 text-amber-400">
+                                <i className="fa-solid fa-pen-to-square"></i> Edit Transaksi e-Toll
+                            </h3>
+                            <button onClick={onClose} className="text-slate-400 hover:text-white text-lg">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-3">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor e-Toll (16 Digit)</label>
+                                    <input 
+                                        type="text" 
+                                        value={formData.etollNumber} 
+                                        onChange={e => setFormData({...formData, etollNumber: formatCardNumber(e.target.value)})} 
+                                        className="w-full p-2 text-xs border border-slate-700 rounded-xl font-mono bg-slate-950 text-white" 
+                                        required 
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Merchant / Penyedia</label>
+                                    <input type="text" value={formData.merchant} onChange={e => setFormData({...formData, merchant: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl bg-slate-950 text-white" required />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Nominal (Rp)</label>
+                                    <input type="number" value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl font-bold bg-slate-950 text-white" required />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-slate-400 mb-1">No. Invoice / Resi</label>
+                                    <input type="text" value={formData.invoiceNumber} onChange={e => setFormData({...formData, invoiceNumber: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl font-mono bg-slate-950 text-white" required />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-400 mb-1">Tanggal Transaksi</label>
+                                <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="w-full p-2 text-xs border border-slate-700 rounded-xl bg-slate-950 text-white" required />
+                            </div>
+
+                            <div className="flex gap-2 pt-2">
+                                <button type="button" onClick={onClose} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
+                                <button type="submit" className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-md">Simpan Perubahan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function NfcModal({ cards, setCards, transactions, currentMonth, onClose, showToastNotification }) {
             const [scannedCardNum, setScannedCardNum] = React.useState('');
+            const [scannedUid, setScannedUid] = React.useState('');
+            const [matchedCard, setMatchedCard] = React.useState(null);
+            const [isScanning, setIsScanning] = React.useState(false);
+            const [unregisteredMode, setUnregisteredMode] = React.useState(false);
+            
+            // Pair/Register Form State
+            const [pairingOption, setPairingOption] = React.useState('EXISTING');
+            const [selectedExistingCardId, setSelectedExistingCardId] = React.useState('');
+            const [newCardForm, setNewCardForm] = React.useState({ label: '', number: '', bank: 'Mandiri' });
+
+            const [nfcSupported] = React.useState('NDEFReader' in window);
+            const [nfcStatus, setNfcStatus] = React.useState(
+                'NDEFReader' in window 
+                    ? 'Klik "Aktifkan Sensor NFC HP" lalu tempelkan kartu e-Toll ke belakang perangkat Anda.' 
+                    : 'Browser ini tidak mendukung Web NFC API (Gunakan Chrome Android) atau jalankan Mode Simulasi.'
+            );
+
+            const handleNfcReadSuccess = (uidRaw, cardNumFromNdef = '') => {
+                const cleanUid = (uidRaw || '').replace(/:/g, '').toUpperCase();
+                setScannedUid(uidRaw || cleanUid);
+
+                // Find card by matching nfcUid or number
+                let foundCard = cards.find(c => {
+                    const cCleanNum = (c.number || '').replace(/\D/g, '');
+                    const cNfcUid = (c.nfcUid || '').replace(/:/g, '').toUpperCase();
+                    return (cleanUid && cNfcUid === cleanUid) || (cleanUid && cCleanNum.includes(cleanUid));
+                });
+
+                if (!foundCard && cardNumFromNdef) {
+                    const formattedNdef = formatCardNumber(cardNumFromNdef);
+                    foundCard = cards.find(c => c.number === formattedNdef);
+                }
+
+                if (foundCard) {
+                    setScannedCardNum(foundCard.number);
+                    setMatchedCard(foundCard);
+                    setUnregisteredMode(false);
+                    setNfcStatus(`Kartu Terdaftar Ditemukan: ${foundCard.label}`);
+                } else {
+                    setScannedCardNum('');
+                    setMatchedCard(null);
+                    setUnregisteredMode(true);
+                    setNfcStatus(`Kartu NFC Terdeteksi! (UID: ${uidRaw || 'N/A'}). Silakan hubungkan dengan data kartu.`);
+                }
+            };
+
+            const startNfcScan = async () => {
+                if (!('NDEFReader' in window)) {
+                    setNfcStatus('Web NFC tidak didukung di browser ini. Gunakan Google Chrome di Android.');
+                    return;
+                }
+
+                try {
+                    setNfcStatus('Meminta izin akses sensor NFC browser...');
+                    const ndef = new window.NDEFReader();
+                    await ndef.scan();
+                    setIsScanning(true);
+                    setNfcStatus('Sensor NFC Aktif! Tempelkan kartu e-Toll ke belakang HP...');
+
+                    ndef.onreading = (event) => {
+                        if (navigator.vibrate) {
+                            try { navigator.vibrate([100, 50, 100]); } catch (e) {}
+                        }
+
+                        const uid = event.serialNumber || '';
+                        let cardNumFromNdef = '';
+                        if (event.message && event.message.records) {
+                            for (const record of event.message.records) {
+                                if (record.recordType === 'text') {
+                                    try {
+                                        const textDecoder = new TextDecoder(record.encoding || 'utf-8');
+                                        cardNumFromNdef = textDecoder.decode(record.data);
+                                    } catch (e) {}
+                                }
+                            }
+                        }
+
+                        handleNfcReadSuccess(uid, cardNumFromNdef);
+                    };
+
+                    ndef.onreadingerror = () => {
+                        if (navigator.vibrate) {
+                            try { navigator.vibrate(200); } catch (e) {}
+                        }
+                        setNfcStatus('Kartu terdeteksi! Tempelkan rapat posisi chip kartu dengan sensor HP.');
+                    };
+                } catch (error) {
+                    console.error("NFC Scan Error:", error);
+                    setIsScanning(false);
+                    if (error.name === 'NotAllowedError') {
+                        setNfcStatus('Akses NFC ditolak. Berikan izin akses pada pop-up Chrome Anda.');
+                    } else {
+                        setNfcStatus('Gagal mengaktifkan NFC: ' + (error.message || error));
+                    }
+                }
+            };
 
             const handleSimulateNfc = () => {
-                const randomCard = cards[Math.floor(Math.random() * cards.length)]?.number || '6032 9812 3456 7890';
-                setScannedCardNum(randomCard);
+                const shouldPickUnregistered = Math.random() > 0.5 || cards.length === 0;
+                if (!shouldPickUnregistered && cards.length > 0) {
+                    const randomCard = cards[Math.floor(Math.random() * cards.length)];
+                    handleNfcReadSuccess(randomCard.nfcUid || '04:A2:B3:C4:D5:E6', randomCard.number);
+                } else {
+                    const fakeUid = '04:' + Math.floor(10+Math.random()*89) + ':' + Math.floor(10+Math.random()*89) + ':A1:B2:C3';
+                    handleNfcReadSuccess(fakeUid);
+                }
+            };
+
+            const handleSaveNfcPairing = (e) => {
+                e.preventDefault();
+                const cleanUid = (scannedUid || '').replace(/:/g, '').toUpperCase();
+
+                if (pairingOption === 'EXISTING') {
+                    if (!selectedExistingCardId) {
+                        showToastNotification('Pilih kartu terdaftar yang ingin dihubungkan.', 'error');
+                        return;
+                    }
+                    setCards(prev => prev.map(c => {
+                        if (c.id === selectedExistingCardId) {
+                            const updated = { ...c, nfcUid: cleanUid };
+                            setMatchedCard(updated);
+                            setScannedCardNum(updated.number);
+                            return updated;
+                        }
+                        return c;
+                    }));
+                    showToastNotification('Sensor NFC berhasil dihubungkan dengan kartu pilihan!');
+                } else {
+                    if (!newCardForm.number || newCardForm.number.replace(/\D/g, '').length < 16) {
+                        showToastNotification('Nomor kartu harus 16 digit.', 'error');
+                        return;
+                    }
+                    const formattedNum = formatCardNumber(newCardForm.number);
+                    const detected = detectBankFromCardNumber(formattedNum, newCardForm.label);
+                    const newCard = {
+                        id: 'card-nfc-' + Date.now(),
+                        label: newCardForm.label || `${detected.label} (${formattedNum.slice(-4)})`,
+                        number: formattedNum,
+                        bank: newCardForm.bank || detected.bank,
+                        color: detected.color,
+                        nfcUid: cleanUid
+                    };
+                    setCards(prev => [...prev, newCard]);
+                    setMatchedCard(newCard);
+                    setScannedCardNum(newCard.number);
+                    showToastNotification(`Kartu NFC baru (${formattedNum}) berhasil didaftarkan!`);
+                }
+
+                setUnregisteredMode(false);
             };
 
             const cardSpentThisMonth = React.useMemo(() => {
@@ -2012,34 +2409,168 @@
             }, [scannedCardNum, transactions, currentMonth]);
 
             return (
-                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md">
-                    <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 text-center shadow-2xl border border-slate-700">
+                <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-md modal-backdrop overflow-y-auto">
+                    <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 my-6 shadow-2xl border border-slate-700">
                         <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                             <h3 className="font-extrabold text-base flex items-center gap-2 text-purple-400">
-                                <i className="fa-solid fa-nfc-symbol"></i> NFC Card Reader
+                                <i className="fa-solid fa-nfc-symbol"></i> Web NFC Hardware Reader
                             </h3>
                             <button onClick={onClose} className="text-slate-400 hover:text-white text-lg">
                                 <i className="fa-solid fa-xmark"></i>
                             </button>
                         </div>
 
-                        <div className="py-6 space-y-3">
-                            <div className="w-20 h-20 rounded-full bg-purple-950/60 border border-purple-800/60 text-purple-400 flex items-center justify-center mx-auto text-3xl animate-pulse">
+                        <div className="py-2 space-y-3 text-center">
+                            <div className={`w-20 h-20 rounded-full border flex items-center justify-center mx-auto text-3xl transition-all duration-500 ${
+                                isScanning 
+                                    ? 'bg-purple-600/30 border-purple-400 text-purple-300 animate-pulse shadow-lg shadow-purple-500/30' 
+                                    : 'bg-slate-900 border-slate-700 text-slate-500'
+                            }`}>
                                 <i className="fa-solid fa-wifi rotate-90"></i>
                             </div>
-                            <p className="text-xs text-slate-400 font-medium">
-                                Tempelkan kartu e-Toll ke bagian belakang HP Anda.
-                            </p>
 
-                            <button onClick={handleSimulateNfc} className="text-xs bg-purple-950/80 text-purple-300 px-3 py-1.5 rounded-lg font-bold border border-purple-800/60 hover:bg-purple-900 transition">
-                                Simulasi Tap NFC (Demo)
-                            </button>
+                            <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 text-xs">
+                                <p className="font-bold text-slate-200">{nfcStatus}</p>
+                            </div>
+
+                            <div className="flex flex-col gap-2">
+                                {nfcSupported ? (
+                                    <button 
+                                        onClick={startNfcScan} 
+                                        disabled={isScanning}
+                                        className={`w-full py-3 rounded-xl font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg transition ${
+                                            isScanning 
+                                                ? 'bg-emerald-600 text-white animate-pulse' 
+                                                : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white'
+                                        }`}
+                                    >
+                                        <i className={`fa-solid ${isScanning ? 'fa-circle-notch animate-spin' : 'fa-podcast'}`}></i>
+                                        <span>{isScanning ? 'Sensor NFC Siap Membaca...' : 'Aktifkan Sensor NFC HP'}</span>
+                                    </button>
+                                ) : (
+                                    <div className="p-2.5 bg-amber-950/50 border border-amber-800/60 rounded-xl text-[11px] text-amber-300 text-left font-medium">
+                                        <i className="fa-solid fa-circle-info mr-1 text-amber-400"></i>
+                                        Web NFC memerlukan Google Chrome Android dengan hardware NFC aktif.
+                                    </div>
+                                )}
+
+                                <button 
+                                    onClick={handleSimulateNfc} 
+                                    className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3.5 py-2 rounded-xl font-bold border border-slate-700 transition"
+                                >
+                                    <i className="fa-solid fa-vial text-purple-400 mr-1"></i> Simulasi Tap NFC (Demo)
+                                </button>
+                            </div>
                         </div>
 
-                        {scannedCardNum && (
+                        {/* FORM PAIRING KARTU JIKA KARTU NFC BELUM TERDAFTAR */}
+                        {unregisteredMode && (
+                            <form onSubmit={handleSaveNfcPairing} className="p-4 bg-amber-950/40 border border-amber-700/60 rounded-2xl text-left space-y-3">
+                                <div className="flex items-center gap-2 text-amber-400 font-extrabold text-xs uppercase">
+                                    <i className="fa-solid fa-triangle-exclamation"></i>
+                                    <span>Kartu NFC Belum Terdaftar</span>
+                                </div>
+                                <p className="text-[11px] text-slate-300">
+                                    UID Hardware: <span className="font-mono font-bold text-amber-300">{scannedUid}</span>. Pilih cara pendaftaran kartu ini:
+                                </p>
+
+                                <div className="flex gap-2 pt-1">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setPairingOption('EXISTING')}
+                                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold border transition ${
+                                            pairingOption === 'EXISTING' ? 'bg-amber-500/20 text-amber-300 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-800'
+                                        }`}
+                                    >
+                                        Hubungkan Kartu Ada
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setPairingOption('NEW')}
+                                        className={`flex-1 py-1.5 px-2 rounded-lg text-[11px] font-bold border transition ${
+                                            pairingOption === 'NEW' ? 'bg-amber-500/20 text-amber-300 border-amber-500' : 'bg-slate-900 text-slate-400 border-slate-800'
+                                        }`}
+                                    >
+                                        Daftarkan Kartu Baru
+                                    </button>
+                                </div>
+
+                                {pairingOption === 'EXISTING' ? (
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Pilih Kartu Terdaftar di Master:</label>
+                                        <select 
+                                            value={selectedExistingCardId}
+                                            onChange={e => setSelectedExistingCardId(e.target.value)}
+                                            className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl text-xs text-white font-bold"
+                                            required
+                                        >
+                                            <option value="">-- Pilih Kartu --</option>
+                                            {cards.map(c => (
+                                                <option key={c.id} value={c.id}>
+                                                    {c.label} ({c.number})
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2 text-xs">
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Label Kartu</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="Contoh: e-Money Tim Operasional" 
+                                                value={newCardForm.label}
+                                                onChange={e => setNewCardForm({...newCardForm, label: e.target.value})}
+                                                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-medium"
+                                                required
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor 16-Digit Fisik Kartu</label>
+                                            <input 
+                                                type="text" 
+                                                placeholder="6032 1234 5678 9012" 
+                                                value={newCardForm.number}
+                                                onChange={e => setNewCardForm({...newCardForm, number: formatCardNumber(e.target.value)})}
+                                                className="w-full p-2 bg-slate-950 border border-slate-700 rounded-xl font-mono text-white"
+                                                required
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <button 
+                                    type="submit" 
+                                    className="w-full py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl text-xs shadow-md transition"
+                                >
+                                    Simpan & Hubungkan NFC
+                                </button>
+                            </form>
+                        )}
+
+                        {/* HASIL BACA KARTU YANG SUDAH TERHUBUNG */}
+                        {scannedCardNum && !unregisteredMode && (
                             <div className="p-4 bg-slate-950 rounded-2xl border border-purple-900/60 text-left space-y-2">
-                                <p className="text-[10px] font-bold text-purple-400 uppercase">Kartu NFC Terdeteksi:</p>
-                                <p className="text-base font-mono font-bold text-white">{scannedCardNum}</p>
+                                <div className="flex justify-between items-center">
+                                    <p className="text-[10px] font-bold text-purple-400 uppercase">Kartu NFC Terverifikasi:</p>
+                                    {scannedUid && (
+                                        <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
+                                            UID: {scannedUid}
+                                        </span>
+                                    )}
+                                </div>
+
+                                <p className="text-base font-mono font-bold text-white">
+                                    {scannedCardNum}
+                                </p>
+
+                                {matchedCard && (
+                                    <p className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
+                                        <i className="fa-solid fa-circle-check"></i>
+                                        <span>{matchedCard.label} ({matchedCard.bank})</span>
+                                    </p>
+                                )}
+
                                 <div className="pt-2 border-t border-slate-800 flex justify-between items-center">
                                     <span className="text-xs text-slate-400">Total Pengisian Bulan Ini ({currentMonth}):</span>
                                     <span className="text-lg font-black text-purple-300">{formatRupiah(cardSpentThisMonth)}</span>
@@ -2056,7 +2587,7 @@
             const balance = depositAmount - totalAmount;
 
             return (
-                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto">
+                <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-md overflow-y-auto modal-backdrop">
                     <div className="bg-white text-slate-900 p-8 rounded-2xl max-w-3xl w-full space-y-6 my-8 print-container shadow-2xl">
                         <div className="flex justify-between items-center border-b pb-4 no-print">
                             <h3 className="font-bold text-sm text-slate-800">Dokumen Lembar SPJ Resmi (Siap Cetak PDF)</h3>
@@ -2113,7 +2644,7 @@
                                     {transactions.map((t, idx) => (
                                         <tr key={t.id} className="border-b border-slate-200">
                                             <td className="p-2 border text-center">{idx + 1}</td>
-                                            <td className="p-2 border">{t.date}</td>
+                                            <td className="p-2 border">{formatDateIndo(t.date)}</td>
                                             <td className="p-2 border font-bold">{t.merchant}</td>
                                             <td className="p-2 border font-mono">{formatCardNumber(t.etollNumber)}</td>
                                             <td className="p-2 border font-mono">{t.invoiceNumber}</td>
