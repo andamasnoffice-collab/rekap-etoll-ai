@@ -116,10 +116,30 @@
             border-radius: 2px;
         }
 
+        /* Narrow Margin Sheet (Khusus Lampiran Struk agar gambar maksimal) */
+        .legal-sheet-narrow {
+            width: 100%;
+            max-width: 216mm;
+            padding: 8mm 10mm;
+            box-sizing: border-box;
+            background: #ffffff;
+            color: #000000;
+            margin: 0 auto 24px auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+        }
+
+        .receipt-hd-img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
         @media print {
             @page {
                 size: 216mm 356mm portrait;
-                margin: 20mm 20mm;
+                margin: 10mm 10mm;
             }
             header, main, nav, .no-print, .modal-backdrop, .modal-backdrop-bg { 
                 display: none !important; 
@@ -168,7 +188,7 @@
                 break-inside: avoid !important;
                 page-break-after: always !important;
                 break-after: page !important;
-                padding: 0 !important;
+                padding: 10mm 10mm !important;
                 box-sizing: border-box !important;
                 background: white !important;
                 color: black !important;
@@ -181,7 +201,25 @@
                 height: auto !important;
                 overflow: hidden !important;
             }
-            .legal-sheet:last-child {
+            .legal-sheet-narrow {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                padding: 4mm 6mm !important;
+                box-sizing: border-box !important;
+                background: white !important;
+                color: black !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                margin: 0 auto !important;
+                max-width: 100% !important;
+                min-height: auto !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+            .legal-sheet:last-child, .legal-sheet-narrow:last-child {
                 page-break-after: auto !important;
                 break-after: auto !important;
             }
@@ -275,7 +313,8 @@
             }
 
             if (fileId) {
-                return `https://drive.google.com/thumbnail?id=${fileId}&sz=w800`;
+                // Gunakan parameter resolusi tinggi (sz=w2500) agar gambar dicetak dalam kualitas tajam/HD
+                return `https://drive.google.com/thumbnail?id=${fileId}&sz=w2500`;
             }
             return cleanUrl;
         }
@@ -740,6 +779,7 @@
     <script type="text/babel">
         function SpjPrintModal({ spjProfile, selectedMonth, transactions, depositAmount, cards, onClose }) {
             const [selectedDocView, setSelectedDocView] = React.useState('ALL');
+            const [invoicesPerPage, setInvoicesPerPage] = React.useState(4); // Pilihan: 4 atau 6 per lembar
 
             const getMonthLabelIndo = (yearMonth) => {
                 if (!yearMonth || yearMonth === 'ALL') return 'Agustus 2026';
@@ -808,43 +848,65 @@
                 });
             });
 
-            // Bagi invoice per 6 buah per lembar (2 kolom x 3 baris)
+            // Pembagian halaman dinamis (4 atau 6 per lembar)
             const invoicePages = [];
-            for (let i = 0; i < orderedInvoices.length; i += 6) {
-                invoicePages.push(orderedInvoices.slice(i, i + 6));
+            for (let i = 0; i < orderedInvoices.length; i += invoicesPerPage) {
+                invoicePages.push(orderedInvoices.slice(i, i + invoicesPerPage));
             }
 
             return (
                 <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-2 sm:p-4 backdrop-blur-md overflow-y-auto print-modal-overlay">
                     <div className="bg-slate-900 text-slate-100 rounded-3xl max-w-5xl w-full my-4 print-container shadow-2xl overflow-hidden border border-slate-700">
                         {/* TOOLBAR NO-PRINT */}
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-slate-950 text-white gap-3 no-print border-b border-slate-800">
+                        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center p-4 bg-slate-950 text-white gap-3 no-print border-b border-slate-800">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 rounded-2xl bg-gradient-to-tr from-amber-500/20 to-orange-500/20 text-amber-400 font-bold text-sm border border-amber-500/30">
                                     <i className="fa-solid fa-file-contract"></i>
                                 </div>
                                 <div>
                                     <h3 className="font-extrabold text-sm text-white flex items-center gap-2">
-                                        Dokumen SPJ Resmi (Format Legal & Margin Normal)
+                                        Dokumen SPJ Resmi (Format Legal & Margin Khusus)
                                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-amber-300 border border-slate-700 font-normal">
-                                            {3 + invoicePages.length} Halaman Siap Cetak
+                                            {3 + invoicePages.length} Halaman
                                         </span>
                                     </h3>
-                                    <p className="text-[11px] text-slate-400">Rekap Rincian, Kuitansi, SPBy, & Lampiran Foto Struk (6 Invoice/Lembar)</p>
+                                    <p className="text-[11px] text-slate-400">Rekap, Kuitansi, SPBy, & Lampiran Struk ({invoicesPerPage} Struk/Lembar, Margin Sempit)</p>
                                 </div>
                             </div>
 
                             <div className="flex flex-wrap items-center gap-2">
+                                {/* Pengaturan Kerapatan Struk (4 vs 6 per lembar) */}
+                                <div className="flex items-center bg-slate-800/90 p-1 rounded-xl text-xs font-bold border border-slate-700">
+                                    <span className="text-[10px] font-bold text-slate-400 px-2 flex items-center gap-1">
+                                        <i className="fa-solid fa-layer-group text-amber-400"></i> Layout:
+                                    </span>
+                                    <button 
+                                        onClick={() => setInvoicesPerPage(4)} 
+                                        className={`px-2.5 py-1 rounded-lg transition text-xs flex items-center gap-1.5 ${invoicesPerPage === 4 ? 'bg-indigo-600 text-white font-black shadow' : 'text-slate-400 hover:text-white'}`}
+                                        title="4 Invoice per Lembar (Gambar Lebih Besar & Jelas)"
+                                    >
+                                        <span>4 / Hal (Besar)</span>
+                                    </button>
+                                    <button 
+                                        onClick={() => setInvoicesPerPage(6)} 
+                                        className={`px-2.5 py-1 rounded-lg transition text-xs flex items-center gap-1.5 ${invoicesPerPage === 6 ? 'bg-indigo-600 text-white font-black shadow' : 'text-slate-400 hover:text-white'}`}
+                                        title="6 Invoice per Lembar (Format Hemat Kertas)"
+                                    >
+                                        <span>6 / Hal (Hemat)</span>
+                                    </button>
+                                </div>
+
+                                {/* Filter Tampilan Dokumen */}
                                 <div className="flex bg-slate-800/90 p-1 rounded-xl text-xs font-bold border border-slate-700">
-                                    <button onClick={() => setSelectedDocView('ALL')} className={`px-3 py-1.5 rounded-lg transition ${selectedDocView === 'ALL' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>Semua ({3 + invoicePages.length} Hal)</button>
-                                    <button onClick={() => setSelectedDocView('REKAP')} className={`px-3 py-1.5 rounded-lg transition ${selectedDocView === 'REKAP' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>1. Rekap</button>
-                                    <button onClick={() => setSelectedDocView('KUITANSI')} className={`px-3 py-1.5 rounded-lg transition ${selectedDocView === 'KUITANSI' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>2. Kuitansi</button>
-                                    <button onClick={() => setSelectedDocView('SPBY')} className={`px-3 py-1.5 rounded-lg transition ${selectedDocView === 'SPBY' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>3. SPBy</button>
-                                    <button onClick={() => setSelectedDocView('INVOICES')} className={`px-3 py-1.5 rounded-lg transition ${selectedDocView === 'INVOICES' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>4. Lampiran Struk ({invoicePages.length} Hal)</button>
+                                    <button onClick={() => setSelectedDocView('ALL')} className={`px-2.5 py-1.5 rounded-lg transition ${selectedDocView === 'ALL' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>Semua ({3 + invoicePages.length})</button>
+                                    <button onClick={() => setSelectedDocView('REKAP')} className={`px-2.5 py-1.5 rounded-lg transition ${selectedDocView === 'REKAP' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>1. Rekap</button>
+                                    <button onClick={() => setSelectedDocView('KUITANSI')} className={`px-2.5 py-1.5 rounded-lg transition ${selectedDocView === 'KUITANSI' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>2. Kuitansi</button>
+                                    <button onClick={() => setSelectedDocView('SPBY')} className={`px-2.5 py-1.5 rounded-lg transition ${selectedDocView === 'SPBY' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>3. SPBy</button>
+                                    <button onClick={() => setSelectedDocView('INVOICES')} className={`px-2.5 py-1.5 rounded-lg transition ${selectedDocView === 'INVOICES' ? 'bg-amber-500 text-slate-950 font-black shadow' : 'text-slate-400 hover:text-white'}`}>4. Struk ({invoicePages.length} Hal)</button>
                                 </div>
 
                                 <button onClick={() => window.print()} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black px-4 py-2 rounded-xl flex items-center gap-2 shadow-lg shadow-amber-500/20 transition">
-                                    <i className="fa-solid fa-print"></i> Cetak / Simpan PDF
+                                    <i className="fa-solid fa-print"></i> Cetak / PDF
                                 </button>
                                 <button onClick={onClose} className="p-2 text-slate-400 hover:text-white text-base rounded-xl hover:bg-slate-800 transition">
                                     <i className="fa-solid fa-xmark"></i>
@@ -1221,71 +1283,79 @@
                                 </div>
                             )}
 
-                            {/* ================= HALAMAN 4+: LAMPIRAN BUKTI TRANSAKSI STRUK (6 INVOICE PER LEMBAR LEGAL) ================= */}
+                            {/* ================= HALAMAN 4+: LAMPIRAN BUKTI TRANSAKSI STRUK (DINAMIS 4 ATAU 6 PER LEMBAR, MARGIN SEMPIT) ================= */}
                             {(selectedDocView === 'ALL' || selectedDocView === 'INVOICES') && (
                                 <>
-                                    {invoicePages.map((pageGroup, pageIdx) => (
-                                        <div key={pageIdx} className="legal-sheet official-doc">
-                                            {/* HEADER LEMBAR LAMPIRAN STRUK */}
-                                            <div className="border-b-[1.5px] border-black pb-1.5 mb-2.5 text-center">
-                                                <p className="font-bold text-[10pt] uppercase tracking-wide">
-                                                    LAMPIRAN BUKTI TRANSAKSI & STRUK TOP-UP E-TOLL
-                                                </p>
-                                                <p className="text-[8.5pt] font-normal">
-                                                    Kantor Pusat Universitas Sebelas Maret • Periode {getMonthLabelIndo(selectedMonth)} (Lembar {pageIdx + 1} dari {invoicePages.length})
-                                                </p>
-                                            </div>
+                                    {invoicePages.map((pageGroup, pageIdx) => {
+                                        const is4Layout = invoicesPerPage === 4;
+                                        const cardHeight = is4Layout ? '146mm' : '96mm';
+                                        const imgMaxHeight = is4Layout ? '132mm' : '82mm';
 
-                                            {/* GRID 2 KOLOM X 3 BARIS = 6 INVOICE PER LEMBAR LEGAL */}
-                                            <div className="grid grid-cols-2 gap-2.5">
-                                                {pageGroup.map((inv, invIdx) => {
-                                                    const directImgUrl = getGoogleDriveDirectImageUrl(inv.gdriveUrl);
-                                                    return (
-                                                        <div 
-                                                            key={invIdx} 
-                                                            className="flex flex-col items-center justify-between p-1"
-                                                            style={{ height: '94mm', pageBreakInside: 'avoid', breakInside: 'avoid' }}
-                                                        >
-                                                            {/* AREA FOTO STRUK MAKSIMAL */}
-                                                            <div className="w-full flex-1 flex items-center justify-center overflow-hidden">
-                                                                {directImgUrl ? (
-                                                                    <img 
-                                                                        src={directImgUrl} 
-                                                                        alt={`Struk ${inv.invoiceNumber}`} 
-                                                                        className="max-h-[82mm] w-auto max-w-full object-contain mx-auto"
-                                                                        onError={(e) => {
-                                                                            e.target.onerror = null;
-                                                                            e.target.style.display = 'none';
-                                                                            if (e.target.nextSibling) {
-                                                                                e.target.nextSibling.style.display = 'flex';
-                                                                            }
-                                                                        }}
-                                                                    />
-                                                                ) : null}
-                                                                
-                                                                {/* Fallback Display jika gambar belum ada */}
-                                                                <div 
-                                                                    className={`flex-col items-center justify-center text-center p-3 border border-gray-400 rounded-lg w-full h-[80mm] ${directImgUrl ? 'hidden' : 'flex'}`}
-                                                                >
-                                                                    <div className="w-9 h-9 rounded-full border border-gray-400 flex items-center justify-center text-gray-600 mb-1.5">
-                                                                        <i className="fa-solid fa-receipt text-sm"></i>
+                                        return (
+                                            <div key={pageIdx} className="legal-sheet-narrow official-doc">
+                                                {/* HEADER LEMBAR LAMPIRAN STRUK */}
+                                                <div className="border-b-[1.5px] border-black pb-1 mb-2 text-center">
+                                                    <p className="font-bold text-[10pt] uppercase tracking-wide">
+                                                        LAMPIRAN BUKTI TRANSAKSI & STRUK TOP-UP E-TOLL
+                                                    </p>
+                                                    <p className="text-[8pt] font-normal">
+                                                        Kantor Pusat Universitas Sebelas Maret • Periode {getMonthLabelIndo(selectedMonth)} (Lembar {pageIdx + 1} dari {invoicePages.length})
+                                                    </p>
+                                                </div>
+
+                                                {/* GRID DINAMIS (2 KOLOM X 2 BARIS = 4 INVOICE ATAU 2 KOLOM X 3 BARIS = 6 INVOICE) */}
+                                                <div className={`grid grid-cols-2 ${is4Layout ? 'gap-3.5' : 'gap-2'}`}>
+                                                    {pageGroup.map((inv, invIdx) => {
+                                                        const directImgUrl = getGoogleDriveDirectImageUrl(inv.gdriveUrl);
+                                                        return (
+                                                            <div 
+                                                                key={invIdx} 
+                                                                className="flex flex-col items-center justify-between p-1 border border-dashed border-gray-300 rounded-lg bg-white"
+                                                                style={{ height: cardHeight, pageBreakInside: 'avoid', breakInside: 'avoid' }}
+                                                            >
+                                                                {/* AREA FOTO STRUK DENGAN UKURAN DINAMIS */}
+                                                                <div className="w-full flex-1 flex items-center justify-center overflow-hidden p-0.5">
+                                                                    {directImgUrl ? (
+                                                                        <img 
+                                                                            src={directImgUrl} 
+                                                                            alt={`Struk ${inv.invoiceNumber}`} 
+                                                                            className="w-auto max-w-full object-contain mx-auto transition-transform receipt-hd-img"
+                                                                            style={{ maxHeight: imgMaxHeight }}
+                                                                            onError={(e) => {
+                                                                                e.target.onerror = null;
+                                                                                e.target.style.display = 'none';
+                                                                                if (e.target.nextSibling) {
+                                                                                    e.target.nextSibling.style.display = 'flex';
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                    ) : null}
+                                                                    
+                                                                    {/* Fallback Display jika gambar belum ada */}
+                                                                    <div 
+                                                                        className={`flex-col items-center justify-center text-center p-3 border border-gray-400 rounded-xl w-full ${directImgUrl ? 'hidden' : 'flex'}`}
+                                                                        style={{ height: `calc(${cardHeight} - 16mm)` }}
+                                                                    >
+                                                                        <div className="w-10 h-10 rounded-full border-2 border-gray-400 flex items-center justify-center text-gray-600 mb-1.5">
+                                                                            <i className="fa-solid fa-receipt text-lg"></i>
+                                                                        </div>
+                                                                        <p className="font-bold text-[9pt] text-gray-800 uppercase">BUKTI STRUK PEMBELIAN</p>
+                                                                        <p className="text-[8.5pt] text-gray-700 font-bold mt-1">Nominal: Rp{formatNumberOnly(inv.amount)},00</p>
+                                                                        <p className="text-[7.5pt] text-gray-500 italic mt-0.5">Invoice: {inv.invoiceNumber}</p>
                                                                     </div>
-                                                                    <p className="font-bold text-[8.5pt] text-gray-800 uppercase">BUKTI STRUK PEMBELIAN</p>
-                                                                    <p className="text-[8pt] text-gray-700 font-bold mt-1">Nominal: Rp{formatNumberOnly(inv.amount)},00</p>
-                                                                    <p className="text-[7pt] text-gray-500 italic mt-1">Invoice: {inv.invoiceNumber}</p>
+                                                                </div>
+
+                                                                {/* KETERANGAN HANYA NOMOR KARTU & TANGGAL DI BAWAH STRUK */}
+                                                                <div className="w-full text-center pt-1.5 font-mono text-[8.5pt] text-gray-900 border-t border-gray-300 tracking-tight leading-tight shrink-0">
+                                                                    <span className="font-bold">{inv.rekapNo}.</span> No. Kartu: <strong className="font-mono">{inv.etollNumber}</strong> &nbsp;|&nbsp; Tgl: <strong>{formatDateIndo(inv.date)}</strong>
                                                                 </div>
                                                             </div>
-
-                                                            {/* KETERANGAN HANYA NOMOR KARTU & TANGGAL DI BAWAH STRUK */}
-                                                            <div className="w-full text-center pt-1 font-mono text-[8pt] text-gray-900 border-t border-gray-300 tracking-tight leading-tight">
-                                                                <span className="font-bold">{inv.rekapNo}.</span> No. Kartu: <strong className="font-mono">{inv.etollNumber}</strong> &nbsp;|&nbsp; Tgl: <strong>{formatDateIndo(inv.date)}</strong>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
+                                                        );
+                                                    })}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </>
                             )}
 
@@ -1873,6 +1943,67 @@
             const [toast, setToast] = React.useState(null);
 
             const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
+
+            // Otomatis sinkronkan kartu baru dari transaksi ke master cards jika belum terdaftar
+            React.useEffect(() => {
+                if (!transactions || transactions.length === 0) return;
+                let addedAny = false;
+                const existingCleanNums = new Set(cards.map(c => (c.number || '').replace(/\D/g, '')));
+                const newCardsToAdd = [];
+
+                transactions.forEach(tx => {
+                    const cleanNum = (tx.etollNumber || '').replace(/\D/g, '');
+                    if (cleanNum && cleanNum.length >= 12 && !existingCleanNums.has(cleanNum)) {
+                        existingCleanNums.add(cleanNum);
+                        const officialData = OFFICIAL_DRIVER_MAP[cleanNum];
+                        const matchedPreset = INITIAL_CARDS.find(ic => (ic.number || '').replace(/\D/g, '') === cleanNum);
+                        const detected = detectBankFromCardNumber(tx.etollNumber, tx.merchant);
+
+                        let driverName = officialData ? officialData.name : (matchedPreset ? matchedPreset.label : null);
+                        let nopol = officialData ? officialData.nopol : (matchedPreset ? matchedPreset.nopol : null);
+
+                        // Cek kemiripan prefix 12 digit jika kartu pengganti
+                        if (!driverName) {
+                            const prefix12 = cleanNum.slice(0, 12);
+                            for (const [k, v] of Object.entries(OFFICIAL_DRIVER_MAP)) {
+                                if (k.startsWith(prefix12)) {
+                                    driverName = v.name;
+                                    nopol = v.nopol;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!driverName) {
+                            driverName = (tx.merchant && !['bank bri', 'brimo', 'mandiri', 'livin'].some(b => tx.merchant.toLowerCase().includes(b))) 
+                                ? tx.merchant 
+                                : `Driver Baru (${cleanNum.slice(-4)})`;
+                        }
+                        if (!nopol) {
+                            nopol = 'AD 1060 XA';
+                        }
+
+                        newCardsToAdd.push({
+                            id: 'card-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                            label: driverName,
+                            nopol: nopol,
+                            number: formatCardNumber(tx.etollNumber),
+                            bank: detected.bank,
+                            color: detected.color
+                        });
+                        addedAny = true;
+                    }
+                });
+
+                if (addedAny && newCardsToAdd.length > 0) {
+                    setCards(prev => {
+                        const updated = [...prev, ...newCardsToAdd];
+                        localStorage.setItem('etoll_cards', JSON.stringify(updated));
+                        pushToCloud('cards', updated);
+                        return updated;
+                    });
+                }
+            }, [transactions]);
 
             const fetchCloudData = React.useCallback(async (pidOverride = null) => {
                 const targetPid = (pidOverride !== null ? pidOverride : firebaseProjectId).trim();
@@ -2629,7 +2760,7 @@
                                                 <i className="fa-solid fa-file-invoice-dollar text-amber-400"></i>
                                                 <span>Penyusunan SPJ & Surat Perintah Bayar (SPBy)</span>
                                             </h3>
-                                            <p className="text-xs text-slate-400 mt-0.5">Pengaturan Deposit Kasbon, Pejabat Penandatangan, dan Ekspor Dokumen</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Pengaturan Deposit Kasbon, Pengemudi & Kendaraan, Pejabat Penandatangan, dan Ekspor Dokumen</p>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-2">
                                             <button onClick={handleExportExcel} className="px-3.5 py-2 bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow">
@@ -2658,6 +2789,112 @@
                                                 }}
                                                 className="p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm w-44 focus:ring-2 focus:ring-brand-500"
                                             />
+                                        </div>
+                                    </div>
+
+                                    {/* Kolom Khusus Pengaturan Nama Driver & Nopol untuk Cetak SPJ */}
+                                    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-2 border-b border-slate-800">
+                                            <div>
+                                                <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                                                    <i className="fa-solid fa-id-card-clip"></i>
+                                                    <span>Pengaturan Nama Driver & No. Polisi Yang Dicetak Pada SPJ ({selectedMonth})</span>
+                                                </h4>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Edit nama pengemudi dan plat nopol kendaraan langsung di sini untuk menyesuaikan lembar cetak SPJ.</p>
+                                            </div>
+                                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                                                {cardBreakdown.length} Driver Terlibat Bulan Ini
+                                            </span>
+                                        </div>
+
+                                        <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-800">
+                                            <table className="w-full text-left text-xs border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-950 text-slate-400 uppercase font-bold text-[10px] tracking-wider border-b border-slate-800">
+                                                        <th className="py-2.5 px-3 w-10 text-center">No</th>
+                                                        <th className="py-2.5 px-3">Nomor e-Toll</th>
+                                                        <th className="py-2.5 px-3">Nama Driver (Tampil di SPJ)</th>
+                                                        <th className="py-2.5 px-3">No. Polisi (Tampil di SPJ)</th>
+                                                        <th className="py-2.5 px-3 text-right">Total Bulan Ini</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-800/80 bg-slate-900/50">
+                                                    {cardBreakdown.map((item, idx) => {
+                                                        const clean = item.number.replace(/\D/g, '');
+                                                        return (
+                                                            <tr key={item.number} className="hover:bg-slate-800/40 transition">
+                                                                <td className="py-2.5 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                                                <td className="py-2.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">{item.number}</td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={item.label}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setCards(prev => {
+                                                                                const existingIdx = prev.findIndex(c => (c.number || '').replace(/\D/g, '') === clean);
+                                                                                let updated;
+                                                                                if (existingIdx >= 0) {
+                                                                                    updated = [...prev];
+                                                                                    updated[existingIdx] = { ...updated[existingIdx], label: val };
+                                                                                } else {
+                                                                                    const detected = detectBankFromCardNumber(item.number);
+                                                                                    updated = [...prev, {
+                                                                                        id: 'card-' + Date.now(),
+                                                                                        label: val,
+                                                                                        nopol: item.nopol || 'AD 1060 XA',
+                                                                                        number: item.number,
+                                                                                        bank: detected.bank,
+                                                                                        color: detected.color
+                                                                                    }];
+                                                                                }
+                                                                                pushToCloud('cards', updated);
+                                                                                return updated;
+                                                                            });
+                                                                        }}
+                                                                        className="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-medium text-xs focus:ring-1 focus:ring-amber-400"
+                                                                        placeholder="Masukkan nama driver..."
+                                                                    />
+                                                                </td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={item.nopol}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value.toUpperCase();
+                                                                            setCards(prev => {
+                                                                                const existingIdx = prev.findIndex(c => (c.number || '').replace(/\D/g, '') === clean);
+                                                                                let updated;
+                                                                                if (existingIdx >= 0) {
+                                                                                    updated = [...prev];
+                                                                                    updated[existingIdx] = { ...updated[existingIdx], nopol: val };
+                                                                                } else {
+                                                                                    const detected = detectBankFromCardNumber(item.number);
+                                                                                    updated = [...prev, {
+                                                                                        id: 'card-' + Date.now(),
+                                                                                        label: item.label,
+                                                                                        nopol: val,
+                                                                                        number: item.number,
+                                                                                        bank: detected.bank,
+                                                                                        color: detected.color
+                                                                                    }];
+                                                                                }
+                                                                                pushToCloud('cards', updated);
+                                                                                return updated;
+                                                                            });
+                                                                        }}
+                                                                        className="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 font-mono font-bold uppercase text-xs focus:ring-1 focus:ring-amber-400"
+                                                                        placeholder="Contoh: AD 1060 XA"
+                                                                    />
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-right font-black text-brand-300 whitespace-nowrap">
+                                                                    {formatRupiah(item.total)}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
 
@@ -2834,6 +3071,9 @@
                             transactions={transactions}
                             depositAmount={monthlyDeposits[selectedMonth] || 0}
                             cards={cards}
+                            setCards={setCards}
+                            pushToCloud={pushToCloud}
+                            showToastNotification={showToastNotification}
                             onClose={() => setShowSpjPrintModal(false)}
                         />
                     )}
