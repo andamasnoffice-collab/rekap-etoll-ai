@@ -228,6 +228,51 @@
     <div id="root"></div>
 
     <script type="text/babel">
+        function safeStorageGet(key, fallback = null) {
+            try {
+                const value = localStorage.getItem(key);
+                return value === null ? fallback : value;
+            } catch (e) {
+                console.warn('localStorage read failed:', key, e);
+                return fallback;
+            }
+        }
+
+        function safeStorageSet(key, value) {
+            try {
+                localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                console.warn('localStorage write failed:', key, e);
+                return false;
+            }
+        }
+
+        function getLocalDateString(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function compressImageDataUrl(dataUrl, maxWidth = 1280, quality = 0.72) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const scale = Math.min(1, maxWidth / img.naturalWidth);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (!ctx) return reject(new Error('Browser tidak mendukung Canvas untuk kompresi gambar.'));
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => reject(new Error('Gambar struk tidak dapat dibaca.'));
+                img.src = dataUrl;
+            });
+        }
+
         function formatRupiah(number) {
             return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number || 0);
         }
@@ -459,8 +504,6 @@
             const [showNewCardInput, setShowNewCardInput] = React.useState(false);
             const [newCardData, setNewCardData] = React.useState({ label: '', nopol: '', number: '', bank: 'BCA' });
             const [editingCard, setEditingCard] = React.useState(null);
-            const [editCardPassword, setEditCardPassword] = React.useState('');
-            const [editCardPassError, setEditCardPassError] = React.useState('');
             const [updateLinkedTxs, setUpdateLinkedTxs] = React.useState(true);
 
             const REQUIRED_PASSWORD = 'anda321';
@@ -482,30 +525,31 @@
                     if (cleanNum) {
                         const newDeleted = [...new Set([...deletedCardNumbers, cleanNum])];
                         setDeletedCardNumbers(newDeleted);
-                        localStorage.setItem('etoll_deleted_cards', JSON.stringify(newDeleted));
+                        safeStorageSet('etoll_deleted_cards', JSON.stringify(newDeleted));
                     }
                     pushToCloud('cards', updatedCards);
                     showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
                 } else if (type === 'RESET_LOCAL') {
                     setTransactions([]);
-                    localStorage.setItem('etoll_transactions', JSON.stringify([]));
+                    safeStorageSet('etoll_transactions', JSON.stringify([]));
                     showToastNotification('Database transaksi lokal berhasil dikosongkan.', 'info');
                 } else if (type === 'RESET_ALL') {
                     setTransactions(INITIAL_DUMMY_TXS);
                     setCards(INITIAL_CARDS);
                     setMonthlyDeposits({ '2026-08': 20000000 });
                     setDeletedCardNumbers([]);
-                    localStorage.setItem('etoll_transactions', JSON.stringify(INITIAL_DUMMY_TXS));
-                    localStorage.setItem('etoll_cards', JSON.stringify(INITIAL_CARDS));
-                    localStorage.setItem('etoll_monthly_deposits', JSON.stringify({ '2026-08': 20000000 }));
-                    localStorage.setItem('etoll_deleted_cards', JSON.stringify([]));
+                    safeStorageSet('etoll_transactions', JSON.stringify(INITIAL_DUMMY_TXS));
+                    safeStorageSet('etoll_cards', JSON.stringify(INITIAL_CARDS));
+                    safeStorageSet('etoll_monthly_deposits', JSON.stringify({ '2026-08': 20000000 }));
+                    safeStorageSet('etoll_deleted_cards', JSON.stringify([]));
 
                     if (firebaseProjectId) {
                         try {
                             const targetPid = firebaseProjectId.trim();
                             const dbUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions.json`;
-                            await fetch(dbUrl, { method: 'DELETE' });
-                            pushToCloud('cards', INITIAL_CARDS);
+                            const response = await fetch(dbUrl, { method: 'DELETE' });
+                            if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+                            await pushToCloud('cards', INITIAL_CARDS);
                             pushToCloud('monthlyDeposits', { '2026-08': 20000000 });
                             showToastNotification('Database Cloud direset & data UNS diinisialisasi ulang!', 'info');
                             fetchCloudData();
@@ -539,14 +583,9 @@
                 e.preventDefault();
                 if (!editingCard) return;
 
-                if (editCardPassword !== REQUIRED_PASSWORD) {
-                    setEditCardPassError('Password admin salah! Harap periksa kembali.');
-                    return;
-                }
-
                 const cleanNewNum = (editingCard.number || '').replace(/\D/g, '');
-                if (cleanNewNum.length < 16) {
-                    showToastNotification('Nomor kartu harus 16 digit.', 'error');
+                if (!cleanNewNum) {
+                    showToastNotification('Nomor e-Toll tidak boleh kosong.', 'error');
                     return;
                 }
 
@@ -584,7 +623,7 @@
 
                     if (hasTxChanges) {
                         setTransactions(updatedTxs);
-                        localStorage.setItem('etoll_transactions', JSON.stringify(updatedTxs));
+                        safeStorageSet('etoll_transactions', JSON.stringify(updatedTxs));
                         pushToCloud('transactions', updatedTxs);
                     }
                 }
@@ -645,7 +684,7 @@
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor Kartu (16 Digit)</label>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor e-Toll</label>
                                         <input 
                                             type="text" 
                                             placeholder="6013 5001 9148 5664" 
@@ -714,8 +753,6 @@
                                                     <button 
                                                         onClick={() => {
                                                             setEditingCard({ ...card });
-                                                            setEditCardPassword('');
-                                                            setEditCardPassError('');
                                                         }}
                                                         className="px-2.5 py-1 bg-amber-950/60 hover:bg-amber-600 text-amber-300 hover:text-white border border-amber-800/60 rounded-xl font-bold transition flex items-center gap-1 text-[11px]"
                                                         title="Edit Data Kartu"
@@ -904,7 +941,7 @@
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                         <div>
-                                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor Kartu (16 Digit)</label>
+                                            <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor e-Toll</label>
                                             <input 
                                                 type="text" 
                                                 value={editingCard.number} 
@@ -941,41 +978,22 @@
                                         </label>
                                     </div>
 
-                                    {/* KONFIRMASI PASSWORD EDIT KARTU */}
-                                    <div className="p-3 bg-amber-950/40 rounded-xl border border-amber-800/60 space-y-1.5">
-                                        <label className="block text-[10px] font-bold text-amber-300">
-                                            <i className="fa-solid fa-lock mr-1 text-amber-400"></i> Password Admin Konfirmasi (anda321):
-                                        </label>
-                                        <input 
-                                            type="password"
-                                            value={editCardPassword}
-                                            onChange={e => { setEditCardPassword(e.target.value); setEditCardPassError(''); }}
-                                            placeholder="Masukkan password admin..."
-                                            className="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-1 focus:ring-amber-400"
-                                            required
-                                        />
-                                        {editCardPassError && (
-                                            <p className="text-rose-400 text-[10px] font-bold flex items-center gap-1">
-                                                <i className="fa-solid fa-circle-exclamation"></i> {editCardPassError}
-                                            </p>
-                                        )}
-                                    </div>
-
-                                    <div className="flex gap-2 pt-2">
-                                        <button 
+                                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                                        <button
                                             type="button"
-                                            onClick={() => setEditingCard(null)} 
-                                            className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800"
+                                            onClick={() => setEditingCard(null)}
+                                            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition"
                                         >
                                             Batal
                                         </button>
-                                        <button 
+                                        <button
                                             type="submit"
-                                            className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                                            className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-extrabold text-xs transition shadow-lg flex items-center gap-2"
                                         >
-                                            Simpan Perubahan
+                                            <i className="fa-solid fa-floppy-disk"></i> Simpan Perubahan
                                         </button>
                                     </div>
+
                                 </form>
                             </div>
                         </div>
@@ -1080,7 +1098,7 @@
                 merchant: '',
                 amount: '',
                 invoiceNumber: '',
-                date: new Date().toISOString().substring(0, 10),
+                date: getLocalDateString(),
                 gdriveUrl: ''
             });
 
@@ -1096,10 +1114,14 @@
                 if (file) {
                     setSelectedImageBytes(file.size || 500000);
                     const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const dataUrl = event.target.result;
-                        setSelectedImage(dataUrl);
-                        setFormData(prev => ({ ...prev, gdriveUrl: dataUrl }));
+                    reader.onload = async (event) => {
+                        try {
+                            const compressed = await compressImageDataUrl(event.target.result);
+                            setSelectedImage(compressed);
+                            setFormData(prev => ({ ...prev, gdriveUrl: compressed }));
+                        } catch (err) {
+                            showToastNotification(err.message || 'Gagal memproses foto struk.', 'error');
+                        }
                     };
                     reader.readAsDataURL(file);
                 }
@@ -1107,6 +1129,11 @@
 
             const handleRunOcr = async () => {
                 if (!selectedImage) return;
+
+                if (!modalApiKey.trim()) {
+                    showToastNotification('API Key Gemini wajib diisi untuk menjalankan OCR dari browser ini.', 'error');
+                    return;
+                }
 
                 if (isQuotaExceeded) {
                     showToastNotification("Batas kuota gratis harian tercapai. Masukkan API Key Gemini.", "error");
@@ -1126,7 +1153,7 @@
                             merchant: result.merchant || 'Saiful Pramono',
                             amount: result.amount || '',
                             invoiceNumber: cleanInvoice,
-                            date: result.date || new Date().toISOString().substring(0, 10),
+                            date: result.date || getLocalDateString(),
                             gdriveUrl: selectedImage
                         }));
 
@@ -1235,7 +1262,7 @@
                             <form onSubmit={handleSubmit} className="space-y-3 pt-2">
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor Kartu (16 Digit)</label>
+                                        <label className="block text-[10px] font-bold text-slate-400 mb-1">Nomor e-Toll</label>
                                         <input 
                                             type="text" 
                                             value={formData.etollNumber} 
@@ -1918,22 +1945,13 @@
                 merchant: transaction.merchant || '',
                 amount: transaction.amount || '',
                 invoiceNumber: transaction.invoiceNumber || '',
-                date: transaction.date || new Date().toISOString().substring(0, 10),
+                date: transaction.date || getLocalDateString(),
                 source: transaction.source || 'Web Scan / Manual',
                 gdriveUrl: transaction.gdriveUrl || transaction.driveFileUrl || '',
                 createdAt: transaction.createdAt
             });
-            const [passwordInput, setPasswordInput] = React.useState('');
-            const [passError, setPassError] = React.useState('');
-
-            const REQUIRED_PASSWORD = 'anda321';
-
             const handleSubmit = (e) => {
                 e.preventDefault();
-                if (passwordInput !== REQUIRED_PASSWORD) {
-                    setPassError('Password admin salah! Harap periksa kembali.');
-                    return;
-                }
                 onSave(formData);
             };
 
@@ -2149,7 +2167,7 @@
         function App() {
             // Perbaikan Bug 1: Pertahankan data tersimpan walau < 15 kartu
             const [cards, setCards] = React.useState(() => {
-                const saved = localStorage.getItem('etoll_cards');
+                const saved = safeStorageGet('etoll_cards');
                 if (saved) {
                     try {
                         const parsed = JSON.parse(saved);
@@ -2161,7 +2179,7 @@
 
             const [deletedCardNumbers, setDeletedCardNumbers] = React.useState(() => {
                 try {
-                    return JSON.parse(localStorage.getItem('etoll_deleted_cards')) || [];
+                    return JSON.parse(safeStorageGet('etoll_deleted_cards')) || [];
                 } catch (e) {
                     return [];
                 }
@@ -2169,7 +2187,7 @@
 
             // Perbaikan Bug 1 & 2: Pertahankan data transaksi kosong / parsial tanpa memaksa dummy
             const [transactions, setTransactions] = React.useState(() => {
-                const saved = localStorage.getItem('etoll_transactions');
+                const saved = safeStorageGet('etoll_transactions');
                 if (saved !== null) {
                     try {
                         const parsed = JSON.parse(saved);
@@ -2179,14 +2197,14 @@
                 return INITIAL_DUMMY_TXS;
             });
 
-            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
-            const [tempFbPid, setTempFbPid] = React.useState(() => localStorage.getItem('etoll_fb_pid') || 'etoll-3366c');
-            const [geminiApiKey, setGeminiApiKey] = React.useState(() => localStorage.getItem('etoll_gemini_key') || '');
-            const [gdriveWebhookUrl, setGdriveWebhookUrl] = React.useState(() => localStorage.getItem('etoll_gdrive_webhook') || '');
+            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => safeStorageGet('etoll_fb_pid') || 'etoll-3366c');
+            const [tempFbPid, setTempFbPid] = React.useState(() => safeStorageGet('etoll_fb_pid') || 'etoll-3366c');
+            const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
+            const [gdriveWebhookUrl, setGdriveWebhookUrl] = React.useState(() => safeStorageGet('etoll_gdrive_webhook') || '');
 
             const [monthlyDeposits, setMonthlyDeposits] = React.useState(() => {
                 try {
-                    return JSON.parse(localStorage.getItem('etoll_monthly_deposits')) || { 
+                    return JSON.parse(safeStorageGet('etoll_monthly_deposits')) || { 
                         [currentYearMonth]: 20000000,
                         '2026-08': 20000000
                     };
@@ -2196,9 +2214,9 @@
             });
 
             const [dailyUsage, setDailyUsage] = React.useState(() => {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getLocalDateString();
                 try {
-                    const saved = JSON.parse(localStorage.getItem('etoll_daily_usage')) || {};
+                    const saved = JSON.parse(safeStorageGet('etoll_daily_usage')) || {};
                     if (saved.date === today) return saved;
                 } catch (e) {}
                 return { date: today, count: 0, bytes: 0 };
@@ -2207,20 +2225,20 @@
             const FREE_DAILY_LIMIT = 15;
 
             const updateDailyUsage = (addedBytes = 500000) => {
-                const today = new Date().toISOString().split('T')[0];
+                const today = getLocalDateString();
                 setDailyUsage(prev => {
                     const isToday = prev.date === today;
                     const newCount = isToday ? prev.count + 1 : 1;
                     const newBytes = isToday ? prev.bytes + addedBytes : addedBytes;
                     const updated = { date: today, count: newCount, bytes: newBytes };
-                    localStorage.setItem('etoll_daily_usage', JSON.stringify(updated));
+                    safeStorageSet('etoll_daily_usage', JSON.stringify(updated));
                     return updated;
                 });
             };
 
             const [spjProfile, setSpjProfile] = React.useState(() => {
                 try {
-                    return JSON.parse(localStorage.getItem('etoll_spj_profile')) || {
+                    return JSON.parse(safeStorageGet('etoll_spj_profile')) || {
                         applicantName: 'Anda Mas Nurhidayanto',
                         applicantNip: '1990090620160801',
                         division: 'Kantor Pusat Universitas Sebelas Maret',
@@ -2247,6 +2265,12 @@
             });
 
             const [activeTab, setActiveTab] = React.useState('dashboard');
+            // Mode Admin: area sensitif hanya ditampilkan setelah password admin benar.
+            // Status tidak disimpan ke localStorage agar sesi admin berakhir saat halaman di-refresh.
+            const [isAdminMode, setIsAdminMode] = React.useState(false);
+            const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+            const [adminPasswordInput, setAdminPasswordInput] = React.useState('');
+            const [adminPassError, setAdminPassError] = React.useState('');
             const [selectedMonth, setSelectedMonth] = React.useState(currentYearMonth);
             const [analyticsViewMode, setAnalyticsViewMode] = React.useState('DRIVER'); // 'DRIVER', 'BANK', 'TIMELINE'
             const [selectedCardFilter, setSelectedCardFilter] = React.useState('ALL');
@@ -2270,12 +2294,46 @@
 
             const REQUIRED_PASSWORD = 'anda321';
 
+            const openAdminLogin = () => {
+                if (isAdminMode) {
+                    setIsAdminMode(false);
+                    if (['monthly_recap', 'cloud_config', 'master_data'].includes(activeTab)) {
+                        setActiveTab('dashboard');
+                    }
+                    showToastNotification('Mode Admin dinonaktifkan.', 'info');
+                    return;
+                }
+                setAdminPasswordInput('');
+                setAdminPassError('');
+                setShowAdminLogin(true);
+            };
+
+            const confirmAdminLogin = () => {
+                if (adminPasswordInput !== REQUIRED_PASSWORD) {
+                    setAdminPassError('Password admin salah! Harap periksa kembali.');
+                    return;
+                }
+                setIsAdminMode(true);
+                setShowAdminLogin(false);
+                setAdminPasswordInput('');
+                setAdminPassError('');
+                showToastNotification('Mode Admin aktif. Menu administrasi dan data penting telah dibuka.', 'success');
+            };
+
+            const handleAdminTab = (tab) => {
+                if (!isAdminMode) {
+                    openAdminLogin();
+                    return;
+                }
+                setActiveTab(tab);
+            };
+
             const handleUpdateDeposit = (monthKey, amount) => {
                 const targetMonth = (!monthKey || monthKey === 'ALL') ? currentYearMonth : monthKey;
                 const num = Math.max(0, Number(amount) || 0);
                 const updated = { ...monthlyDeposits, [targetMonth]: num };
                 setMonthlyDeposits(updated);
-                localStorage.setItem('etoll_monthly_deposits', JSON.stringify(updated));
+                safeStorageSet('etoll_monthly_deposits', JSON.stringify(updated));
                 pushToCloud('monthlyDeposits', updated);
                 showToastNotification(`Deposit Kasbon ${targetMonth} berhasil diatur ke ${formatRupiah(num)}!`);
             };
@@ -2291,11 +2349,12 @@
                 if (!firebaseProjectId) return;
                 try {
                     const targetPid = firebaseProjectId.trim();
-                    await fetch(`https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`, {
+                    const response = await fetch(`https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(data)
                     });
+                    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
                 } catch (e) {
                     console.error("Cloud push failed for", path, e);
                 }
@@ -2344,7 +2403,7 @@
                 if (addedAny && newCardsToAdd.length > 0) {
                     setCards(prev => {
                         const updated = [...prev, ...newCardsToAdd];
-                        localStorage.setItem('etoll_cards', JSON.stringify(updated));
+                        safeStorageSet('etoll_cards', JSON.stringify(updated));
                         pushToCloud('cards', updated);
                         return updated;
                     });
@@ -2405,14 +2464,14 @@
                 }
             }, [firebaseProjectId, fetchCloudData]);
 
-            React.useEffect(() => { localStorage.setItem('etoll_cards', JSON.stringify(cards)); }, [cards]);
-            React.useEffect(() => { localStorage.setItem('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
-            React.useEffect(() => { localStorage.setItem('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
-            React.useEffect(() => { localStorage.setItem('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
-            React.useEffect(() => { localStorage.setItem('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
-            React.useEffect(() => { localStorage.setItem('etoll_gdrive_webhook', gdriveWebhookUrl); }, [gdriveWebhookUrl]);
-            React.useEffect(() => { localStorage.setItem('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
-            React.useEffect(() => { localStorage.setItem('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
+            React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
+            React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
+            React.useEffect(() => { safeStorageSet('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
+            React.useEffect(() => { safeStorageSet('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
+            React.useEffect(() => { safeStorageSet('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
+            React.useEffect(() => { safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl); }, [gdriveWebhookUrl]);
+            React.useEffect(() => { safeStorageSet('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
+            React.useEffect(() => { safeStorageSet('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
 
             const showToastNotification = (msg, type = 'success') => {
                 setToast({ msg, type });
@@ -2463,7 +2522,14 @@
             const handleSaveTransaction = async (txData) => {
                 let cardNum = formatCardNumber(txData.etollNumber);
                 if (cardNum && !cards.some(c => (c.number || '').replace(/\D/g, '') === cardNum.replace(/\D/g, ''))) {
-                    handleAddCard({ label: txData.merchant || 'Driver Baru', number: cardNum });
+                    const cleanNum = cardNum.replace(/\D/g, '');
+                    const officialData = OFFICIAL_DRIVER_MAP[cleanNum];
+                    const matchedPreset = INITIAL_CARDS.find(ic => (ic.number || '').replace(/\D/g, '') === cleanNum);
+                    handleAddCard({
+                        label: officialData?.name || matchedPreset?.label || txData.merchant || 'Driver Baru',
+                        nopol: officialData?.nopol || matchedPreset?.nopol || '',
+                        number: cardNum
+                    });
                 }
 
                 const updatedTx = { 
@@ -2486,11 +2552,12 @@
                         const targetPid = firebaseProjectId.trim();
                         const primaryUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions/${updatedTx.id}.json`;
 
-                        await fetch(primaryUrl, {
+                        const response = await fetch(primaryUrl, {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(updatedTx)
                         });
+                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
                     } catch (e) { console.error("Cloud Push Error:", e); }
                 }
 
@@ -2507,7 +2574,8 @@
                     try {
                         const targetPid = firebaseProjectId.trim();
                         const dbUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions/${id}.json`;
-                        await fetch(dbUrl, { method: 'DELETE' });
+                        const response = await fetch(dbUrl, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
                         showToastNotification('Transaksi dihapus dari Firebase Database!', 'info');
                     } catch (e) {
                         showToastNotification('Terhapus di lokal, gagal di Firebase.', 'error');
@@ -2586,9 +2654,9 @@
             const handleSaveCloudSettings = async () => {
                 const cleanPid = tempFbPid.trim();
                 setFirebaseProjectId(cleanPid);
-                localStorage.setItem('etoll_fb_pid', cleanPid);
-                localStorage.setItem('etoll_gemini_key', geminiApiKey);
-                localStorage.setItem('etoll_gdrive_webhook', gdriveWebhookUrl);
+                safeStorageSet('etoll_fb_pid', cleanPid);
+                safeStorageSet('etoll_gemini_key', geminiApiKey);
+                safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl);
                 
                 showToastNotification("Menyimpan & menguji koneksi Realtime DB...");
                 await fetchCloudData(cleanPid);
@@ -2787,6 +2855,10 @@
                                     <i className="fa-solid fa-camera text-xs"></i>
                                     <span>Scan Struk</span>
                                 </button>
+                                <button onClick={openAdminLogin} title={isAdminMode ? 'Keluar dari Mode Admin' : 'Masuk Mode Admin'} className={`font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg border transition ${isAdminMode ? 'bg-rose-600/90 hover:bg-rose-600 text-white border-rose-400/40 shadow-rose-900/30' : 'bg-slate-800/90 hover:bg-slate-700 text-amber-300 border-amber-500/30 shadow-slate-950/30'}`}>
+                                    <i className={`fa-solid ${isAdminMode ? 'fa-lock-open' : 'fa-user-shield'} text-xs`}></i>
+                                    <span>{isAdminMode ? 'Keluar Admin' : 'Mode Admin'}</span>
+                                </button>
                             </div>
                         </div>
 
@@ -2798,17 +2870,54 @@
                             <button onClick={() => setActiveTab('transactions')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'transactions' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
                                 <i className="fa-solid fa-receipt"></i> Tabel Transaksi ({transactions.length})
                             </button>
-                            <button onClick={() => setActiveTab('monthly_recap')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'monthly_recap' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-                                <i className="fa-solid fa-file-invoice-dollar text-amber-400"></i> Rekap SPJ (Kuitansi, Rekap, SPBy)
-                            </button>
-                            <button onClick={() => setActiveTab('cloud_config')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'cloud_config' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-                                <i className="fa-solid fa-cloud text-sky-400"></i> Integrasi Bot & Google Drive
-                            </button>
-                            <button onClick={() => setActiveTab('master_data')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'master_data' ? 'border-rose-500 text-rose-400 bg-rose-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-                                <i className="fa-solid fa-database text-rose-400"></i> Master Data & Reset
-                            </button>
+                            {isAdminMode && (
+                                <>
+                                    <button onClick={() => handleAdminTab('monthly_recap')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'monthly_recap' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-file-invoice-dollar text-amber-400"></i> Rekap SPJ
+                                    </button>
+                                    <button onClick={() => handleAdminTab('cloud_config')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'cloud_config' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-cloud text-sky-400"></i> Integrasi Bot & Drive
+                                    </button>
+                                    <button onClick={() => handleAdminTab('master_data')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'master_data' ? 'border-rose-500 text-rose-400 bg-rose-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-database text-rose-400"></i> Master Data & Reset
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </header>
+
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
+                            <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-5 shadow-2xl border border-amber-700/60">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                                        <i className="fa-solid fa-user-shield text-amber-400 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-white text-base">Mode Admin</h3>
+                                        <p className="text-[10px] text-slate-400">Akses Rekap SPJ, Integrasi Bot, Master Data & pengaturan penting</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-[11px] font-bold text-slate-300">Password Administrator</label>
+                                    <input
+                                        type="password"
+                                        value={adminPasswordInput}
+                                        onChange={e => { setAdminPasswordInput(e.target.value); setAdminPassError(''); }}
+                                        onKeyDown={e => { if (e.key === 'Enter') confirmAdminLogin(); }}
+                                        placeholder="Masukkan password admin..."
+                                        className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-amber-500"
+                                        autoFocus
+                                    />
+                                    {adminPassError && <p className="text-rose-400 text-[11px] font-bold"><i className="fa-solid fa-circle-exclamation mr-1"></i>{adminPassError}</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setShowAdminLogin(false); setAdminPasswordInput(''); setAdminPassError(''); }} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
+                                    <button onClick={confirmAdminLogin} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"><i className="fa-solid fa-unlock mr-1"></i>Masuk Admin</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {toast && (
                         <div className="fixed bottom-5 right-5 z-50 animate-bounce">
@@ -3350,15 +3459,14 @@
                                                             {formatRupiah(tx.amount)}
                                                         </td>
                                                         <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                                                            <div className="flex items-center justify-center gap-1">
+                                                            {isAdminMode && (
+                                                                <div className="flex items-center justify-center gap-1">
                                                                 <button onClick={() => setEditingTx(tx)} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-950/50 rounded-lg transition" title="Edit">
                                                                     <i className="fa-solid fa-pen-to-square"></i>
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => {
                                                                         setDeletingTx(tx);
-                                                                        setDeleteTxPassword('');
-                                                                        setDeleteTxPassError('');
                                                                     }} 
                                                                     className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-lg transition" 
                                                                     title="Hapus"
@@ -3366,6 +3474,7 @@
                                                                     <i className="fa-solid fa-trash-can"></i>
                                                                 </button>
                                                             </div>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                 );
@@ -4006,8 +4115,6 @@
                                     <button 
                                         onClick={() => {
                                             setDeletingTx(null);
-                                            setDeleteTxPassword('');
-                                            setDeleteTxPassError('');
                                         }} 
                                         className="flex-1 py-2.5 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-800 font-bold"
                                     >
@@ -4015,10 +4122,6 @@
                                     </button>
                                     <button 
                                         onClick={() => {
-                                            if (deleteTxPassword !== REQUIRED_PASSWORD) {
-                                                setDeleteTxPassError('Password admin salah! Harap periksa kembali.');
-                                                return;
-                                            }
                                             handleDeleteTransaction(deletingTx.id);
                                         }} 
                                         className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold shadow-lg transition"
