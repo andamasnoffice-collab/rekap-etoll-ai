@@ -505,30 +505,165 @@
             const [newCardData, setNewCardData] = React.useState({ label: '', nopol: '', number: '', bank: 'BCA' });
             const [editingCard, setEditingCard] = React.useState(null);
             const [updateLinkedTxs, setUpdateLinkedTxs] = React.useState(true);
+            const [usageSort, setUsageSort] = React.useState('active');
+            const [migrationBusy, setMigrationBusy] = React.useState(false);
+            const [migrationReport, setMigrationReport] = React.useState(null);
+            const [migrationProgress, setMigrationProgress] = React.useState('');
+            const [migrationPreview, setMigrationPreview] = React.useState(null);
 
             const REQUIRED_PASSWORD = 'anda321';
 
+            const migrationBase = () => {
+                const pid = (firebaseProjectId || '').trim();
+                if (!pid) throw new Error('ID proyek Firebase belum diisi.');
+                return `https://${pid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
+            };
+            const normalizeTxList = (data) => {
+                if (!data || typeof data !== 'object') return [];
+                if (Array.isArray(data)) return data.filter(Boolean).map((tx, i) => ({ ...tx, id: String(tx.id ?? i) }));
+                return Object.entries(data).filter(([,tx]) => tx && typeof tx === 'object').map(([id,tx]) => ({ ...tx, id: String(tx.id ?? id) }));
+            };
+            const monthOfTx = (tx) => {
+                const d = String(tx?.date || '').slice(0,10);
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return null;
+                const dt = new Date(`${d}T00:00:00Z`);
+                return Number.isNaN(dt.getTime()) || dt.toISOString().slice(0,10) !== d ? null : d.slice(0,7);
+            };
+            const readMigrationJson = async (url) => {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), 20000);
+                try {
+                    const r = await fetch(url, { cache: 'no-store', signal: controller.signal });
+                    if (!r.ok) throw new Error(`Firebase HTTP ${r.status}`);
+                    return await r.json();
+                } catch (err) {
+                    if (err && err.name === 'AbortError') throw new Error('Permintaan Firebase melewati 20 detik. Periksa koneksi atau ukuran data; tidak ada data yang diubah pada tahap pemeriksaan.');
+                    throw err;
+                } finally { clearTimeout(timer); }
+            };
+            // Baca transaksi lama per halaman agar tidak meminta seluruh /transactions sekaligus.
+            const readLegacyTransactionsPaged = async (base, onProgress) => {
+                const all = []; const seenKeys = new Set(); let cursor = null; const pageSize = 250; let page = 0;
+                while (true) {
+                    const params = new URLSearchParams({ orderBy: '"$key"', limitToFirst: String(pageSize) });
+                    if (cursor !== null) params.set('startAt', JSON.stringify(cursor));
+                    const data = await readMigrationJson(`${base}/transactions.json?${params.toString()}`);
+                    if (!data || typeof data !== 'object') break;
+                    const entries = Array.isArray(data) ? data.map((v,i)=>[String(i),v]) : Object.entries(data);
+                    const fresh = entries.filter(([key]) => !seenKeys.has(key));
+                    if (!fresh.length) break;
+                    for (const [key, value] of fresh) {
+                        seenKeys.add(key);
+                        if (value && typeof value === 'object') all.push({ ...value, id: String(value.id ?? key) });
+                    }
+                    cursor = fresh[fresh.length - 1][0]; page++;
+                    if (onProgress) onProgress(all.length, page);
+                    if (entries.length < pageSize) break;
+                    if (page > 10000) throw new Error('Pemeriksaan dihentikan karena jumlah halaman tidak wajar.');
+                }
+                return all;
+            };
+            const inspectMigration = async () => {
+                setMigrationBusy(true); setMigrationReport(null); setMigrationProgress('Menghubungi Firebase dan membaca transaksi lama per 250 data…');
+                try {
+                    const base = migrationBase();
+                    const oldList = await readLegacyTransactionsPaged(base, (count, page) => setMigrationProgress(`Membaca transaksi lama: ${count} data (${page} halaman)…`));
+                    const groups = {};
+                    let invalid = 0;
+                    oldList.forEach(tx => { const m = monthOfTx(tx); if (!m) { invalid++; return; } (groups[m] ||= []).push(tx); });
+                    const months = Object.keys(groups).sort();
+                    const preview = [];
+                    for (const month of months) {
+                        const existing = normalizeTxList(await readMigrationJson(`${base}/transactionsByMonth/${month}.json`));
+                        const existingIds = new Set(existing.map(tx => String(tx.id)));
+                        const newCount = groups[month].filter(tx => !existingIds.has(String(tx.id))).length;
+                        preview.push({ month, oldCount: groups[month].length, targetCount: existing.length, newCount, sourceAmount: groups[month].reduce((a,tx)=>a+(Number(tx.amount)||0),0) });
+                    }
+                    const report = { sourceCount: oldList.length, validCount: oldList.length-invalid, invalidCount: invalid, months: preview.length, rows: preview, status: 'preview' };
+                    setMigrationPreview({ groups, rows: preview }); setMigrationReport(report);
+                    setMigrationProgress('Pemeriksaan selesai. Belum ada data yang diubah.');
+                } catch (e) { setMigrationProgress(`Pemeriksaan gagal: ${e.message || e}`); }
+                finally { setMigrationBusy(false); }
+            };
+            const runMigration = async () => {
+                if (!migrationPreview || !migrationReport) { showToastNotification('Jalankan pemeriksaan awal terlebih dahulu.', 'error'); return; }
+                if (!window.confirm('Mulai migrasi? Data lama tidak akan dihapus. Data di setiap bucket bulanan akan digabung berdasarkan ID transaksi.')) return;
+                setMigrationBusy(true); setMigrationReport(null);
+                const results = []; let copied = 0, skippedInvalid = migrationReport.invalidCount || 0;
+                try {
+                    const base = migrationBase();
+                    const months = Object.keys(migrationPreview.groups).sort();
+                    for (let i=0; i<months.length; i++) {
+                        const month = months[i]; setMigrationProgress(`Migrasi ${month} (${i+1}/${months.length})…`);
+                        const existingData = await readMigrationJson(`${base}/transactionsByMonth/${month}.json`);
+                        const existing = normalizeTxList(existingData);
+                        const merged = new Map(existing.map(tx => [String(tx.id), tx]));
+                        let added = 0;
+                        for (const tx of migrationPreview.groups[month]) {
+                            const id = String(tx.id || '');
+                            if (!id || /[.#$\[\]\/]/.test(id)) throw new Error(`ID transaksi tidak valid pada ${month}; migrasi dihentikan agar data tidak salah alamat.`);
+                            if (!merged.has(id)) {
+                                const wr = await fetch(`${base}/transactionsByMonth/${month}/${encodeURIComponent(id)}.json`, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(tx), cache:'no-store' });
+                                if (!wr.ok) throw new Error(`Gagal menulis transaksi ${id} (${month}): HTTP ${wr.status}`);
+                                merged.set(id, tx); added++;
+                            }
+                        }
+                        const verify = normalizeTxList(await readMigrationJson(`${base}/transactionsByMonth/${month}.json`));
+                        const expectedIds = new Set(merged.keys()); const verifiedIds = new Set(verify.map(tx=>String(tx.id)));
+                        const missing = [...expectedIds].filter(id=>!verifiedIds.has(id));
+                        const expectedAmount = [...merged.values()].reduce((a,tx)=>a+(Number(tx.amount)||0),0);
+                        const verifiedAmount = verify.reduce((a,tx)=>a+(Number(tx.amount)||0),0);
+                        const ok = missing.length===0 && expectedIds.size===verifiedIds.size && expectedAmount===verifiedAmount;
+                        results.push({ month, sourceCount:migrationPreview.groups[month].length, targetCount:verify.length, added, amount:verifiedAmount, ok, missing:missing.length });
+                        copied += added;
+                        if (!ok) throw new Error(`Validasi ${month} belum cocok; data lama tetap dipertahankan.`);
+                    }
+                    setMigrationReport({ status:'done', copied, invalidCount:skippedInvalid, months:results.length, rows:results, sourceCount:migrationReport?.sourceCount || migrationPreview.rows.reduce((a,r)=>a+r.oldCount,0), validCount:migrationPreview.rows.reduce((a,r)=>a+r.oldCount,0) });
+                    setMigrationProgress('Migrasi dan validasi selesai. Data di /transactions tidak dihapus.');
+                    showToastNotification('Migrasi selesai dan validasi bucket bulanan berhasil.', 'success');
+                } catch (e) { setMigrationProgress(`Migrasi berhenti: ${e.message || e}. Data lama tidak dihapus; periksa laporan lalu jalankan pemeriksaan ulang.`); showToastNotification('Migrasi belum selesai; data lama tetap dipertahankan.', 'error'); }
+                finally { setMigrationBusy(false); }
+            };
+
             const handleConfirmAction = async () => {
+                console.info('[Kartu] Tombol Konfirmasi diklik');
+                showToastNotification('Memproses konfirmasi…', 'info');
+                if (!securityModal) return;
+                const { type, payload } = securityModal;
+                // Gunakan metode penghapusan dari file index(15) yang sudah terbukti bekerja:
+                // validasi password, hapus berdasarkan ID kartu, lalu kirim daftar cards ke Firebase.
                 if (passwordInput !== REQUIRED_PASSWORD) {
                     setPassError('Password konfirmasi salah! Harap periksa kembali.');
                     return;
                 }
 
-                if (!securityModal) return;
-
-                const { type, payload } = securityModal;
-
                 if (type === 'DELETE_CARD') {
                     const cleanNum = (payload.number || '').replace(/\D/g, '');
-                    const updatedCards = cards.filter(c => c.id !== payload.id);
+                    const updatedCards = cards.filter(c => String(c.id) !== String(payload.id));
+                    if (updatedCards.length === cards.length) {
+                        showToastNotification('Kartu tidak ditemukan pada daftar aktif. Segarkan data lalu coba lagi.', 'error');
+                        setSecurityModal(null); setPasswordInput(''); setPassError('');
+                        return;
+                    }
+                    // Pertahankan alur metode yang berhasil: perbarui UI/cache, lalu tulis /cards.
                     setCards(updatedCards);
                     if (cleanNum) {
                         const newDeleted = [...new Set([...deletedCardNumbers, cleanNum])];
                         setDeletedCardNumbers(newDeleted);
                         safeStorageSet('etoll_deleted_cards', JSON.stringify(newDeleted));
                     }
-                    pushToCloud('cards', updatedCards);
-                    showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
+                    safeStorageSet('etoll_cards', JSON.stringify(updatedCards));
+                    try {
+                        const saved = await pushToCloud('cards', updatedCards);
+                        if (saved === false) {
+                            showToastNotification('Kartu dihapus pada perangkat ini, tetapi Firebase gagal menyimpan. Periksa koneksi/sinkronisasi.', 'error');
+                        } else {
+                            showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
+                        }
+                    } catch (err) {
+                        console.error('[Kartu] Gagal mengirim penghapusan ke Firebase:', err);
+                        showToastNotification('Kartu dihapus pada perangkat ini, tetapi gagal dikirim ke Firebase.', 'error');
+                    }
                 } else if (type === 'RESET_LOCAL') {
                     setTransactions([]);
                     safeStorageSet('etoll_transactions', JSON.stringify([]));
@@ -624,7 +759,7 @@
                     if (hasTxChanges) {
                         setTransactions(updatedTxs);
                         safeStorageSet('etoll_transactions', JSON.stringify(updatedTxs));
-                        pushToCloud('transactions', updatedTxs);
+                        Promise.all(updatedTxs.map(t => pushToCloud(`transactions/${t.id}`, t)));
                     }
                 }
 
@@ -636,6 +771,24 @@
 
             return (
                 <div className="space-y-6 max-w-5xl mx-auto">
+                    <div className="glass-card p-6 rounded-3xl border border-cyan-700/50 shadow-xl space-y-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-11 h-11 shrink-0 rounded-2xl bg-cyan-500/15 border border-cyan-500/30 flex items-center justify-center"><i className="fa-solid fa-arrow-right-arrow-left text-cyan-300 text-lg"></i></div>
+                            <div className="flex-1"><h3 className="font-extrabold text-base text-white">Migrasi & Validasi Data Transaksi</h3><p className="text-xs text-slate-400 mt-1">Salin transaksi lama ke format bulanan transactionsByMonth/YYYY-MM. Data sumber /transactions tidak dihapus.</p></div>
+                        </div>
+                        <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-700/40 text-amber-200 text-xs"><i className="fa-solid fa-shield-halved mr-1"></i> Lakukan backup Firebase terlebih dahulu. Proses membaca data lama dan bucket bulanan, menulis hanya ID yang belum ada, lalu membaca ulang untuk validasi. Transaksi tanpa tanggal valid akan dilewati dan dilaporkan.</div>
+                        <div className="flex flex-wrap gap-2">
+                            <button disabled={migrationBusy} onClick={inspectMigration} className="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold"><i className="fa-solid fa-magnifying-glass mr-2"></i>Periksa Data (tanpa mengubah)</button>
+                            <button disabled={migrationBusy || !migrationPreview} onClick={runMigration} className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold"><i className="fa-solid fa-database mr-2"></i>{migrationBusy ? 'Sedang diproses…' : 'Mulai Migrasi'}</button>
+                        </div>
+                        {migrationProgress && <p className="text-xs text-cyan-200" role="status">{migrationProgress}</p>}
+                        {migrationReport && <div className="space-y-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                {[['Transaksi lama',migrationReport.sourceCount ?? '—'],['Tanggal valid',migrationReport.validCount ?? '—'],['Bulan',migrationReport.months ?? '—'],[migrationReport.status==='done'?'Baru disalin':'Tanggal tidak valid',migrationReport.status==='done'?(migrationReport.copied ?? 0):(migrationReport.invalidCount ?? 0)]].map(([label,value])=><div key={label} className="p-3 rounded-xl bg-slate-900 border border-slate-700"><div className="text-[10px] text-slate-400">{label}</div><div className="text-lg font-black text-white">{value}</div></div>)}
+                            </div>
+                            {migrationReport.rows?.length>0 && <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-slate-400 border-b border-slate-700"><th className="p-2">Bulan</th><th className="p-2">Sumber</th><th className="p-2">Target</th><th className="p-2">Ditambahkan</th><th className="p-2">Validasi</th></tr></thead><tbody>{migrationReport.rows.map(row=><tr key={row.month} className="border-b border-slate-800"><td className="p-2 text-white font-bold">{row.month}</td><td className="p-2">{row.oldCount ?? row.sourceCount ?? '—'}</td><td className="p-2">{row.targetCount ?? '—'}</td><td className="p-2">{row.newCount ?? row.added ?? '—'}</td><td className="p-2">{row.ok===undefined?<span className="text-amber-300">Siap</span>:row.ok?<span className="text-emerald-300">Cocok</span>:<span className="text-rose-300">Periksa</span>}</td></tr>)}</tbody></table></div>}
+                        </div>}
+                    </div>
                     <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-slate-800">
                             <div>
@@ -716,6 +869,70 @@
                                 </div>
                             </form>
                         )}
+
+                        {(() => {
+                            const now = new Date();
+                            const monthKey = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                            const currentMonth = monthKey(now);
+                            const previousDate = new Date(now.getFullYear(), now.getMonth()-1, 1);
+                            const previousMonth = monthKey(previousDate);
+                            const clean = v => String(v || '').replace(/\D/g, '');
+                            const parseDate = value => {
+                                if (!value) return null;
+                                const d = new Date(String(value).slice(0,10) + 'T00:00:00');
+                                return Number.isNaN(d.getTime()) ? null : d;
+                            };
+                            const stats = cards.map(card => {
+                                const number = clean(card.number);
+                                const linked = transactions.filter(tx => clean(tx.etollNumber || tx.cardNumber || tx.number) === number);
+                                const dated = linked.map(tx => ({tx, date: parseDate(tx.date || tx.tanggal || tx.createdAt)})).filter(x => x.date);
+                                const thisMonth = dated.filter(x => monthKey(x.date) === currentMonth);
+                                const lastMonth = dated.filter(x => monthKey(x.date) === previousMonth);
+                                const latest = dated.reduce((best, x) => !best || x.date > best ? x.date : best, null);
+                                const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth()-3, 1);
+                                const noTopupThreeMonths = !latest || latest < threeMonthsAgo;
+                                const status = thisMonth.length ? 'AKTIF BULAN INI' : lastMonth.length ? 'TIDAK AKTIF BULAN INI' : 'TIDAK ADA TRANSAKSI';
+                                return {card, thisMonth: thisMonth.length, lastMonth: lastMonth.length, latest, noTopupThreeMonths, status};
+                            });
+                            const countActive = stats.filter(x => x.thisMonth > 0).length;
+                            const countInactive = stats.filter(x => x.thisMonth === 0 && x.lastMonth > 0).length;
+                            const countOld = stats.filter(x => x.noTopupThreeMonths).length;
+                            const sortedStats = [...stats].sort((a,b) => {
+                                if (usageSort === 'active') return b.thisMonth-a.thisMonth || b.lastMonth-a.lastMonth;
+                                if (usageSort === 'inactive') return (b.thisMonth===0 && b.lastMonth>0 ? 1:0)-(a.thisMonth===0 && a.lastMonth>0 ? 1:0) || a.thisMonth-b.thisMonth || b.lastMonth-a.lastMonth;
+                                if (usageSort === 'old') return Number(b.noTopupThreeMonths)-Number(a.noTopupThreeMonths) || (a.latest?.getTime() ?? 0)-(b.latest?.getTime() ?? 0);
+                                if (usageSort === 'thisMonth') return b.thisMonth-a.thisMonth || clean(a.card.number).localeCompare(clean(b.card.number));
+                                if (usageSort === 'lastMonth') return b.lastMonth-a.lastMonth || clean(a.card.number).localeCompare(clean(b.card.number));
+                                if (usageSort === 'latest') return (b.latest?.getTime() ?? 0)-(a.latest?.getTime() ?? 0);
+                                return clean(a.card.number).slice(-4).localeCompare(clean(b.card.number).slice(-4));
+                            });
+                            const fmt = d => d ? d.toLocaleDateString('id-ID', {day:'2-digit', month:'short', year:'numeric'}) : 'Belum ada top-up';
+                            return <div className="rounded-2xl border border-cyan-900/50 bg-slate-950/60 p-4 space-y-3">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                    <div><h4 className="text-sm font-extrabold text-cyan-300"><i className="fa-solid fa-chart-column mr-2"></i>Perbandingan Aktivitas Kartu e-Toll</h4>
+                                    <p className="text-[11px] text-slate-400 mt-1">Berdasarkan transaksi/top-up tercatat. Bulan ini: {currentMonth} · Bulan sebelumnya: {previousMonth}.</p></div>
+                                    <button type="button" onClick={() => { if (typeof fetchCloudData === 'function') fetchCloudData(); showToastNotification('Memuat ulang data transaksi untuk analisis kartu…', 'info'); }} className="px-3 py-2 rounded-lg bg-cyan-900/50 border border-cyan-700/50 text-cyan-200 text-[11px] font-bold"><i className="fa-solid fa-rotate mr-1"></i>Segarkan Data</button>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <button type="button" onClick={() => setUsageSort('active')} className={`text-left rounded-xl bg-emerald-950/50 border p-3 transition ${usageSort==='active'?'border-emerald-300 ring-2 ring-emerald-500/30':'border-emerald-800/60 hover:border-emerald-500'}`} title="Klik untuk mengurutkan kartu aktif bulan ini"><div className="text-[10px] uppercase font-bold text-emerald-300">Aktif bulan ini</div><div className="text-2xl font-black text-emerald-200">{countActive}</div><div className="text-[10px] text-slate-400">Klik untuk urutkan kartu aktif</div></button>
+                                    <button type="button" onClick={() => setUsageSort('inactive')} className={`text-left rounded-xl bg-amber-950/40 border p-3 transition ${usageSort==='inactive'?'border-amber-300 ring-2 ring-amber-500/30':'border-amber-800/60 hover:border-amber-500'}`} title="Klik untuk menampilkan kartu tidak aktif bulan ini"><div className="text-[10px] uppercase font-bold text-amber-300">Tidak aktif bulan ini</div><div className="text-2xl font-black text-amber-200">{countInactive}</div><div className="text-[10px] text-slate-400">Klik untuk urutkan kartu tidak aktif</div></button>
+                                    <button type="button" onClick={() => setUsageSort('old')} className={`text-left rounded-xl bg-rose-950/40 border p-3 transition ${usageSort==='old'?'border-rose-300 ring-2 ring-rose-500/30':'border-rose-800/60 hover:border-rose-500'}`} title="Klik untuk mengurutkan kartu tanpa top-up 3 bulan"><div className="text-[10px] uppercase font-bold text-rose-300">Tidak top-up ≥ 3 bulan</div><div className="text-2xl font-black text-rose-200">{countOld}</div><div className="text-[10px] text-slate-400">Klik untuk urutkan kartu lama tanpa top-up</div></button>
+                                </div>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px]"><label htmlFor="usage-sort" className="font-bold text-slate-300">Urutkan kartu otomatis</label><select id="usage-sort" value={usageSort} onChange={e => setUsageSort(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold"><option value="active">Paling aktif bulan ini</option><option value="inactive">Tidak aktif bulan ini</option><option value="old">Tidak top-up ≥ 3 bulan</option><option value="thisMonth">Transaksi bulan ini terbanyak</option><option value="lastMonth">Transaksi bulan lalu terbanyak</option><option value="latest">Top-up terakhir terbaru</option><option value="number">Nomor kartu A–Z</option></select></div>
+                                <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-800">
+                                    <table className="w-full text-left text-[11px] border-collapse min-w-[760px]">
+                                        <thead><tr className="bg-slate-900 text-slate-400 uppercase text-[9px] tracking-wider"><th className="p-3 text-center w-12">No.</th><th className="p-3">Kartu (4 digit akhir)</th><th className="p-3">Driver / Nopol</th><th className="p-3 text-center">Transaksi {currentMonth}</th><th className="p-3 text-center">Transaksi {previousMonth}</th><th className="p-3">Top-up terakhir</th><th className="p-3">Status</th></tr></thead>
+                                        <tbody className="divide-y divide-slate-800">{sortedStats.map(({card,thisMonth,lastMonth,latest,noTopupThreeMonths,status}, index) => {
+                                            const statusClass = noTopupThreeMonths ? 'bg-rose-950 text-rose-300 border-rose-800' : thisMonth ? 'bg-emerald-950 text-emerald-300 border-emerald-800' : lastMonth ? 'bg-amber-950 text-amber-300 border-amber-800' : 'bg-slate-800 text-slate-300 border-slate-700';
+                                            return <tr key={`usage-${card.id}`} className={noTopupThreeMonths ? 'bg-rose-950/15' : ''}>
+                                                <td className="p-3 text-center font-mono font-extrabold text-cyan-300">{index + 1}</td><td className="p-3 font-mono font-extrabold text-white">…{clean(card.number).slice(-4) || '????'}</td><td className="p-3"><div className="font-bold text-slate-200">{card.label || 'Tanpa nama'}</div><div className="text-slate-500">{card.nopol || 'Nopol belum diisi'}</div></td><td className="p-3 text-center font-bold text-emerald-300">{thisMonth}</td><td className="p-3 text-center font-bold text-amber-300">{lastMonth}</td><td className={`p-3 ${noTopupThreeMonths ? 'font-bold text-rose-300' : 'text-slate-300'}`}>{fmt(latest)}{noTopupThreeMonths && <div className="mt-1 text-[9px] font-extrabold text-rose-400">⚠ PERLU DICEK: 3 BULAN TANPA TOP-UP</div>}</td><td className="p-3"><span className={`inline-block rounded-md border px-2 py-1 text-[9px] font-extrabold ${statusClass}`}>{noTopupThreeMonths ? '3 BULAN TANPA TOP-UP' : status}</span></td>
+                                            </tr>;
+                                        })}</tbody>
+                                    </table>
+                                </div>
+                                <p className="text-[10px] text-slate-500">Catatan: status dihitung dari transaksi yang tersedia di aplikasi. Jika riwayat lama belum dimuat dari Firebase, hasil status bisa belum lengkap. Kartu tanpa riwayat transaksi akan ditandai untuk diperiksa, bukan otomatis dinonaktifkan.</p>
+                            </div>;
+                        })()}
 
                         <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800">
                             <table className="w-full text-left text-xs border-collapse">
@@ -849,7 +1066,7 @@
                             <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-rose-800/80">
                                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                                     <h3 className="font-extrabold text-base flex items-center gap-2 text-rose-400">
-                                        <i className="fa-solid fa-shield-halved"></i> Konfirmasi Password Admin
+                                        <i className="fa-solid fa-shield-halved"></i> {securityModal.type === 'DELETE_CARD' ? 'Konfirmasi Hapus Kartu' : 'Konfirmasi Password Admin'}
                                     </h3>
                                     <button onClick={() => setSecurityModal(null)} className="text-slate-400 hover:text-white text-lg">
                                         <i className="fa-solid fa-xmark"></i>
@@ -862,24 +1079,22 @@
                                         <p>{securityModal.desc}</p>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                                            Masukkan Password (anda321):
-                                        </label>
-                                        <input 
-                                            type="password"
-                                            placeholder="Masukkan password konfirmasi..."
-                                            value={passwordInput}
-                                            onChange={e => { setPasswordInput(e.target.value); setPassError(''); }}
-                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
-                                            autoFocus
-                                        />
-                                        {passError && (
-                                            <p className="text-rose-400 text-[11px] font-bold mt-1 flex items-center gap-1">
-                                                <i className="fa-solid fa-circle-exclamation"></i> {passError}
-                                            </p>
-                                        )}
-                                    </div>
+                                    {securityModal.type !== 'DELETE_CARD' && (
+                                        <div>
+                                            <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                                                Masukkan Password (anda321):
+                                            </label>
+                                            <input
+                                                type="password"
+                                                placeholder="Masukkan password konfirmasi..."
+                                                value={passwordInput}
+                                                onChange={e => { setPasswordInput(e.target.value); setPassError(''); }}
+                                                className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
+                                                autoFocus
+                                            />
+                                            {passError && <p className="text-rose-400 text-[11px] font-bold mt-1">{passError}</p>}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex gap-2 pt-2">
@@ -892,10 +1107,10 @@
                                     </button>
                                     <button 
                                         type="button"
-                                        onClick={handleConfirmAction} 
+                                        onClick={() => { console.info('[Kartu] Klik Oke/Konfirmasi diterima'); handleConfirmAction().catch(err => { console.error('[Kartu] Error konfirmasi:', err); showToastNotification(`Konfirmasi gagal: ${err?.message || err}`, 'error'); }); }} 
                                         className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
                                     >
-                                        Konfirmasi
+                                        {securityModal.type === 'DELETE_CARD' ? 'Oke, Hapus' : 'Konfirmasi'}
                                     </button>
                                 </div>
                             </div>
@@ -2197,8 +2412,8 @@
                 return INITIAL_DUMMY_TXS;
             });
 
-            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => safeStorageGet('etoll_fb_pid') || 'etoll-3366c');
-            const [tempFbPid, setTempFbPid] = React.useState(() => safeStorageGet('etoll_fb_pid') || 'etoll-3366c');
+            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => { const savedPid = safeStorageGet('etoll_fb_pid'); return savedPid || 'etoll-3366c'; });
+            const [tempFbPid, setTempFbPid] = React.useState(() => { const savedPid = safeStorageGet('etoll_fb_pid'); return savedPid || 'etoll-3366c'; });
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
             const [gdriveWebhookUrl, setGdriveWebhookUrl] = React.useState(() => safeStorageGet('etoll_gdrive_webhook') || '');
 
@@ -2346,17 +2561,36 @@
             };
 
             const pushToCloud = async (path, data) => {
-                if (!firebaseProjectId) return;
+                if (!firebaseProjectId) {
+                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
+                    return false;
+                }
                 try {
                     const targetPid = firebaseProjectId.trim();
-                    const response = await fetch(`https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`, {
+                    // Jangan membatalkan PUT dengan AbortController: pada beberapa koneksi
+                    // browser lokal, request dibatalkan sebelum Firebase mengembalikan respons.
+                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`;
+                    console.info('[Firebase] Menyimpan', path);
+                    const response = await fetch(url, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(data)
+                        body: JSON.stringify(data),
+                        cache: 'no-store'
                     });
-                    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+                    if (!response.ok) {
+                        let detail = '';
+                        try { detail = await response.text(); } catch (_) {}
+                        throw new Error(`Firebase HTTP ${response.status}${detail ? ': ' + detail.slice(0,180) : ''}`);
+                    }
+                    setSyncStatus({ state: 'success', msg: 'Tersimpan di Firebase' });
+                    console.info('[Firebase] Berhasil menyimpan', path);
+                    return true;
                 } catch (e) {
-                    console.error("Cloud push failed for", path, e);
+                    console.error('Cloud push failed for', path, e);
+                    const message = e?.name === 'AbortError' ? 'Permintaan dibatalkan browser atau koneksi' : (e.message || 'koneksi bermasalah');
+                    setSyncStatus({ state: 'error', msg: `Gagal menyimpan ${path}: ${message}` });
+                    showToastNotification(`Gagal menyimpan ${path}: ${message}`, 'error');
+                    return false;
                 }
             };
 
@@ -2401,6 +2635,7 @@
                 });
 
                 if (addedAny && newCardsToAdd.length > 0) {
+                    // Tulis hanya bila ada kartu baru hasil deteksi transaksi; tidak ada penulisan ulang berkala.
                     setCards(prev => {
                         const updated = [...prev, ...newCardsToAdd];
                         safeStorageSet('etoll_cards', JSON.stringify(updated));
@@ -2410,59 +2645,57 @@
                 }
             }, [transactions, deletedCardNumbers, cards]);
 
-            const fetchCloudData = React.useCallback(async (pidOverride = null) => {
+            const fetchCloudData = React.useCallback(async (pidOverride = null, monthOverride = null) => {
                 const targetPid = (pidOverride !== null ? pidOverride : firebaseProjectId).trim();
-                if (!targetPid) {
-                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif' });
-                    return;
-                }
-                
+                if (!targetPid) { setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif' }); return false; }
                 const baseUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
-
+                const now = new Date();
+                const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                const monthKey = (monthOverride || selectedMonth || currentMonth) === 'ALL' ? currentMonth : (monthOverride || selectedMonth || currentMonth);
+                console.info('[Firebase] Memuat data bulan terpilih:', monthKey, '(tanpa polling/realtime permanen)');
+                const [year, month] = monthKey.split('-');
+                const lastDay = new Date(Number(year), Number(month), 0).getDate();
+                const legacyUrl = new URL(`${baseUrl}/transactions.json`);
+                legacyUrl.searchParams.set('orderBy', '"date"');
+                legacyUrl.searchParams.set('startAt', JSON.stringify(`${monthKey}-01`));
+                legacyUrl.searchParams.set('endAt', JSON.stringify(`${monthKey}-${lastDay}`));
                 try {
-                    const txRes = await fetch(`${baseUrl}/transactions.json`);
-                    if (txRes.ok) {
-                        const data = await txRes.json();
-                        if (data) {
-                            const cloudTxs = Object.keys(data).map(key => ({
-                                id: key,
-                                ...data[key]
-                            }));
-                            setTransactions(cloudTxs.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)));
-                        }
+                    const paths = ['spjProfile', 'cards', 'monthlyDeposits'];
+                    const results = await Promise.all([
+                        fetch(`${baseUrl}/transactionsByMonth/${monthKey}.json`, { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactionsByMonth/${monthKey}: HTTP ${r.status}`); return ['monthlyTx', await r.json()]; }),
+                        fetch(legacyUrl.toString(), { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactions lama ${monthKey}: HTTP ${r.status}`); return ['legacyTx', await r.json()]; }),
+                        ...paths.map(async path => { const r = await fetch(`${baseUrl}/${path}.json`, {cache:'no-store'}); if(!r.ok) throw new Error(`${path}: HTTP ${r.status}`); return [path, await r.json()]; })
+                    ]);
+                    let monthly = [];
+                    const byId = new Map();
+                    for (const [path, data] of results) {
+                        if (path === 'monthlyTx' || path === 'legacyTx') {
+                            const list = data && typeof data === 'object' ? (Array.isArray(data) ? data.filter(Boolean).map((tx,i)=>({id:tx.id ?? String(i), ...tx})) : Object.keys(data).map(key=>({id:key, ...(data[key]||{})})).filter(tx=>tx && tx.id)) : [];
+                            list.forEach(tx => { if (String(tx.date || '').slice(0,7) === monthKey) byId.set(String(tx.id), tx); });
+                        } else if (path === 'spjProfile' && data) setSpjProfile(prev => ({ ...prev, ...data }));
+                        else if (path === 'cards') { const cloudCards = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.keys(data).map(key => ({ id:key, ...data[key] })).filter(Boolean) : []); const deleted = new Set((JSON.parse(safeStorageGet('etoll_deleted_cards') || '[]') || []).map(n => String(n).replace(/\D/g, ''))); setCards(cloudCards.filter(c => !deleted.has(String(c?.number || '').replace(/\D/g, '')))); }
+                        else if (path === 'monthlyDeposits' && data) setMonthlyDeposits(data);
                     }
+                    monthly = [...byId.values()];
+                    setTransactions(prev => {
+                        const outsideMonth = prev.filter(tx => String(tx.date || '').slice(0,7) !== monthKey);
+                        const merged = [...outsideMonth, ...monthly];
+                        const unique = new Map(merged.map(tx => [String(tx.id), tx]));
+                        return [...unique.values()].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+                    });
+                    setSyncStatus({ state: 'success', msg: `Firebase tersinkronisasi — data ${monthKey} dimuat` });
+                    return true;
+                } catch (e) { setSyncStatus({ state: 'error', msg: e.message || 'Gagal terhubung ke Firebase' }); return false; }
+            }, [firebaseProjectId, selectedMonth]);
 
-                    const profileRes = await fetch(`${baseUrl}/spjProfile.json`);
-                    if (profileRes.ok) {
-                        const pData = await profileRes.json();
-                        if (pData) setSpjProfile(prev => ({ ...prev, ...pData }));
-                    }
-
-                    const cardsRes = await fetch(`${baseUrl}/cards.json`);
-                    if (cardsRes.ok) {
-                        const cData = await cardsRes.json();
-                        if (cData && Array.isArray(cData) && cData.length > 0) setCards(cData);
-                    }
-
-                    const depRes = await fetch(`${baseUrl}/monthlyDeposits.json`);
-                    if (depRes.ok) {
-                        const dData = await depRes.json();
-                        if (dData) setMonthlyDeposits(dData);
-                    }
-
-                    setSyncStatus({ state: 'success', msg: `Terhubung Cloud Firebase` });
-                } catch (e) {
-                    setSyncStatus({ state: 'error', msg: e.message || "Gagal terhubung ke Firebase" });
-                }
-            }, [firebaseProjectId]);
-
+            // Hemat kuota: ambil data saat aplikasi dibuka atau saat bulan/proyek berubah.
+            // Tidak memakai polling maupun EventSource permanen. Perubahan dari perangkat lain
+            // akan terlihat setelah tombol Segarkan atau saat aplikasi dibuka kembali.
             React.useEffect(() => {
-                if (firebaseProjectId) {
-                    fetchCloudData();
-                    const interval = setInterval(() => fetchCloudData(), 15000);
-                    return () => clearInterval(interval);
-                }
-            }, [firebaseProjectId, fetchCloudData]);
+                const targetPid = (firebaseProjectId || '').trim();
+                if (!targetPid) return;
+                fetchCloudData(null, selectedMonth);
+            }, [firebaseProjectId, selectedMonth, fetchCloudData]);
 
             React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
             React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
@@ -2487,7 +2720,10 @@
             const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
                 if (!invoiceNum || !invoiceNum.trim()) return false;
                 const clean = invoiceNum.trim().toUpperCase();
-                return transactions.some(t => t.id !== excludeId && t.invoiceNumber && t.invoiceNumber.trim().toUpperCase() === clean);
+                // Pemeriksaan UI dibatasi ke bulan kalender berjalan; worker tetap menjadi validasi utama.
+                const now = new Date();
+                const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                return transactions.some(t => t.id !== excludeId && String(t.date || '').slice(0, 7) === monthKey && t.invoiceNumber && String(t.invoiceNumber).trim().toUpperCase() === clean);
             };
 
             const handleAddCard = (newCardData) => {
@@ -2544,43 +2780,40 @@
                     createdAt: txData.createdAt || new Date().toISOString()
                 };
 
+                let cloudSaved = false;
+                if (firebaseProjectId) {
+                    cloudSaved = await pushToCloud(`transactionsByMonth/${String(updatedTx.date || new Date().toISOString().slice(0,10)).slice(0,7)}/${updatedTx.id}`, updatedTx);
+                }
+                // Simpan cache lokal setelah percobaan cloud; status tidak lagi mengklaim sukses bila cloud gagal.
                 setTransactions(prev => [updatedTx, ...prev.filter(t => t.id !== updatedTx.id)]);
                 if (updatedTx.date) setSelectedMonth(updatedTx.date.substring(0, 7));
-
-                if (firebaseProjectId) {
-                    try {
-                        const targetPid = firebaseProjectId.trim();
-                        const primaryUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions/${updatedTx.id}.json`;
-
-                        const response = await fetch(primaryUrl, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(updatedTx)
-                        });
-                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-                    } catch (e) { console.error("Cloud Push Error:", e); }
-                }
-
                 setShowScanModal(false);
                 setEditingTx(null);
-                showToastNotification('Transaksi berhasil dicatat!');
+                if (!firebaseProjectId) showToastNotification('Transaksi tersimpan lokal; Firebase belum dikonfigurasi.', 'info');
+                else if (cloudSaved) showToastNotification('Transaksi berhasil disimpan ke Firebase dan disinkronkan.');
+                else showToastNotification('Transaksi tersimpan di perangkat, tetapi gagal ke Firebase. Periksa koneksi lalu sinkronkan ulang.', 'error');
             };
 
             const handleDeleteTransaction = async (id) => {
-                setTransactions(prev => prev.filter(t => t.id !== id));
+                const txToDelete = transactions.find(t => String(t.id) === String(id));
                 setDeletingTx(null);
-
                 if (firebaseProjectId) {
                     try {
                         const targetPid = firebaseProjectId.trim();
-                        const dbUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/transactions/${id}.json`;
-                        const response = await fetch(dbUrl, { method: 'DELETE' });
+                        const monthKey = String(txToDelete?.date || '').slice(0,7);
+                        const base = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
+                        const newPath = monthKey ? `${base}/transactionsByMonth/${monthKey}/${id}.json` : '';
+                        let response = newPath ? await fetch(newPath, {method:'DELETE'}) : null;
+                        if (!response || !response.ok) {
+                            // Kompatibilitas untuk transaksi lama yang belum dimigrasikan.
+                            response = await fetch(`${base}/transactions/${id}.json`, {method:'DELETE'});
+                        }
                         if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+                        setTransactions(prev => prev.filter(t => String(t.id) !== String(id)));
                         showToastNotification('Transaksi dihapus dari Firebase Database!', 'info');
-                    } catch (e) {
-                        showToastNotification('Terhapus di lokal, gagal di Firebase.', 'error');
-                    }
+                    } catch (e) { showToastNotification('Gagal menghapus transaksi dari Firebase; data lokal dipertahankan.', 'error'); }
                 } else {
+                    setTransactions(prev => prev.filter(t => String(t.id) !== String(id)));
                     showToastNotification('Transaksi dihapus dari penyimpanan lokal.', 'info');
                 }
             };
