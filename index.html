@@ -516,7 +516,30 @@
             const [newVehiclePlate, setNewVehiclePlate] = React.useState('');
             const [masterListsLoaded, setMasterListsLoaded] = React.useState(false);
 
-            const REQUIRED_PASSWORD = 'anda321';
+            const DEFAULT_ADMIN_PASSWORD_HASH = '3616b7291853d3c5e0f022afd87dea74e392770899a0e67b172f9c1227794612';
+            const hashAdminPassword = async (value) => {
+                if (!window.crypto?.subtle) throw new Error('Browser tidak mendukung enkripsi password. Gunakan Chrome/Edge terbaru.');
+                const bytes = new TextEncoder().encode(String(value));
+                const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+                return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+            };
+            React.useEffect(() => {
+                let cancelled = false;
+                (async () => {
+                    try {
+                        if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi');
+                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
+                        const response = await fetch(url, { cache: 'no-store' });
+                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+                        const value = await response.json();
+                        if (!cancelled) setAdminPasswordHash(typeof value === 'string' && value ? value : DEFAULT_ADMIN_PASSWORD_HASH);
+                    } catch (err) {
+                        if (!cancelled) setAdminPasswordHash(DEFAULT_ADMIN_PASSWORD_HASH);
+                        console.warn('Admin password setting load:', err.message);
+                    }
+                })();
+                return () => { cancelled = true; };
+            }, [firebaseProjectId]);
 
             const migrationBase = () => {
                 const pid = (firebaseProjectId || '').trim();
@@ -2422,12 +2445,18 @@
             const [monthlyDeposits, setMonthlyDeposits] = React.useState(() => {
                 try {
                     return JSON.parse(safeStorageGet('etoll_monthly_deposits')) || { 
-                        [currentYearMonth]: 20000000,
-                        '2026-08': 20000000
+                        [currentYearMonth]: 0,
+                        '2026-08': 0
                     };
                 } catch (e) {
-                    return { [currentYearMonth]: 20000000 };
+                    return { [currentYearMonth]: 0 };
                 }
+            });
+            // Riwayat setoran disimpan terpisah dari nominal saldo bulanan agar kompatibel
+            // dengan data monthlyDeposits lama yang sudah ada di Firebase.
+            const [monthlyDepositHistory, setMonthlyDepositHistory] = React.useState(() => {
+                try { return JSON.parse(safeStorageGet('etoll_monthly_deposit_history')) || {}; }
+                catch (e) { return {}; }
             });
 
             const [dailyUsage, setDailyUsage] = React.useState(() => {
@@ -2486,6 +2515,12 @@
             // Status tidak disimpan ke localStorage agar sesi admin berakhir saat halaman di-refresh.
             const [isAdminMode, setIsAdminMode] = React.useState(false);
             const [showAdminLogin, setShowAdminLogin] = React.useState(false);
+            const [showChangeAdminPassword, setShowChangeAdminPassword] = React.useState(false);
+            const [currentAdminPassword, setCurrentAdminPassword] = React.useState('');
+            const [newAdminPassword, setNewAdminPassword] = React.useState('');
+            const [confirmNewAdminPassword, setConfirmNewAdminPassword] = React.useState('');
+            const [adminPasswordHash, setAdminPasswordHash] = React.useState('');
+            const [changePasswordError, setChangePasswordError] = React.useState('');
             const [adminPasswordInput, setAdminPasswordInput] = React.useState('');
             const [adminPassError, setAdminPassError] = React.useState('');
             const [selectedMonth, setSelectedMonth] = React.useState(currentYearMonth);
@@ -2501,6 +2536,11 @@
             const [showDepositModal, setShowDepositModal] = React.useState(false);
             const [depositModalMonth, setDepositModalMonth] = React.useState(currentYearMonth);
             const [depositModalValue, setDepositModalValue] = React.useState('');
+            const [depositModalDate, setDepositModalDate] = React.useState(getLocalDateString());
+            const [depositProofData, setDepositProofData] = React.useState('');
+            const [depositProofName, setDepositProofName] = React.useState('');
+            const [depositSaving, setDepositSaving] = React.useState(false);
+            const [editingDepositId, setEditingDepositId] = React.useState(null);
             const [deletingTx, setDeletingTx] = React.useState(null);
             const [deleteTxPassword, setDeleteTxPassword] = React.useState('');
             const [deleteTxPassError, setDeleteTxPassError] = React.useState('');
@@ -2509,7 +2549,30 @@
             const [toast, setToast] = React.useState(null);
             const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
 
-            const REQUIRED_PASSWORD = 'anda321';
+            const DEFAULT_ADMIN_PASSWORD_HASH = '3616b7291853d3c5e0f022afd87dea74e392770899a0e67b172f9c1227794612';
+            const hashAdminPassword = async (value) => {
+                if (!window.crypto?.subtle) throw new Error('Browser tidak mendukung enkripsi password. Gunakan Chrome/Edge terbaru.');
+                const bytes = new TextEncoder().encode(String(value));
+                const digest = await window.crypto.subtle.digest('SHA-256', bytes);
+                return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
+            };
+            React.useEffect(() => {
+                let cancelled = false;
+                (async () => {
+                    try {
+                        if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi');
+                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
+                        const response = await fetch(url, { cache: 'no-store' });
+                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
+                        const value = await response.json();
+                        if (!cancelled) setAdminPasswordHash(typeof value === 'string' && value ? value : DEFAULT_ADMIN_PASSWORD_HASH);
+                    } catch (err) {
+                        if (!cancelled) setAdminPasswordHash(DEFAULT_ADMIN_PASSWORD_HASH);
+                        console.warn('Admin password setting load:', err.message);
+                    }
+                })();
+                return () => { cancelled = true; };
+            }, [firebaseProjectId]);
 
             const openAdminLogin = () => {
                 if (isAdminMode) {
@@ -2525,16 +2588,54 @@
                 setShowAdminLogin(true);
             };
 
-            const confirmAdminLogin = () => {
-                if (adminPasswordInput !== REQUIRED_PASSWORD) {
-                    setAdminPassError('Password admin salah! Harap periksa kembali.');
-                    return;
+            const confirmAdminLogin = async () => {
+                try {
+                    const expectedHash = adminPasswordHash || DEFAULT_ADMIN_PASSWORD_HASH;
+                    const suppliedHash = await hashAdminPassword(adminPasswordInput);
+                    if (suppliedHash !== expectedHash) {
+                        setAdminPassError('Password admin salah! Harap periksa kembali.');
+                        return;
+                    }
+                    setIsAdminMode(true);
+                    setShowAdminLogin(false);
+                    setAdminPasswordInput('');
+                    setAdminPassError('');
+                    showToastNotification('Mode Admin aktif. Pengelolaan Deposit Kasbon telah dibuka.', 'success');
+                } catch (err) {
+                    setAdminPassError(err.message || 'Gagal memeriksa password admin.');
                 }
-                setIsAdminMode(true);
-                setShowAdminLogin(false);
-                setAdminPasswordInput('');
-                setAdminPassError('');
-                showToastNotification('Mode Admin aktif. Menu administrasi dan data penting telah dibuka.', 'success');
+            };
+
+            const saveAdminPasswordChange = async () => {
+                try {
+                    if (!isAdminMode) throw new Error('Aktifkan Mode Admin terlebih dahulu.');
+                    if (!currentAdminPassword || !newAdminPassword || newAdminPassword.length < 8)
+                        throw new Error('Password baru wajib minimal 8 karakter.');
+                    if (newAdminPassword !== confirmNewAdminPassword)
+                        throw new Error('Konfirmasi password baru tidak sama.');
+                    const currentHash = await hashAdminPassword(currentAdminPassword);
+                    if (currentHash !== (adminPasswordHash || DEFAULT_ADMIN_PASSWORD_HASH))
+                        throw new Error('Password admin saat ini salah.');
+                    const nextHash = await hashAdminPassword(newAdminPassword);
+                    if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi; password tidak disimpan.');
+                    const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
+                    const response = await fetch(url, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(nextHash),
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) throw new Error(`Gagal menyimpan password ke Firebase (HTTP ${response.status}).`);
+                    setAdminPasswordHash(nextHash);
+                    setCurrentAdminPassword('');
+                    setNewAdminPassword('');
+                    setConfirmNewAdminPassword('');
+                    setChangePasswordError('');
+                    setShowChangeAdminPassword(false);
+                    showToastNotification('Password Admin berhasil diganti dan disimpan di Firebase.', 'success');
+                } catch (err) {
+                    setChangePasswordError(err.message || 'Gagal mengganti password.');
+                }
             };
 
             const handleAdminTab = (tab) => {
@@ -2545,21 +2646,105 @@
                 setActiveTab(tab);
             };
 
-            const handleUpdateDeposit = (monthKey, amount) => {
+            const handleUpdateDeposit = async (monthKey, amount, depositDate = getLocalDateString(), proofData = '', proofName = '') => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengubah Deposit Kasbon.', 'info'); return false; }
                 const targetMonth = (!monthKey || monthKey === 'ALL') ? currentYearMonth : monthKey;
                 const num = Math.max(0, Number(amount) || 0);
-                const updated = { ...monthlyDeposits, [targetMonth]: num };
+                if (!/^\d{4}-\d{2}$/.test(targetMonth) || !/^\d{4}-\d{2}-\d{2}$/.test(depositDate) || depositDate.slice(0,7) !== targetMonth) {
+                    showToastNotification('Tanggal pengisian harus berada pada bulan/periode yang dipilih.', 'error'); return false;
+                }
+                if (num <= 0) { showToastNotification('Masukkan nominal pengisian lebih dari Rp0.', 'error'); return false; }
+                const previousEntries = monthlyDepositHistory[targetMonth] || [];
+                // Kompatibilitas data lama: nominal bulanan lama dipertahankan sebagai saldo awal
+                // hanya saat belum ada riwayat setoran untuk periode tersebut.
+                const legacyOpening = previousEntries.length ? 0 : Math.max(0, Number(monthlyDeposits[targetMonth]) || 0);
+                const openingEntry = legacyOpening > 0 ? [{ id: `opening_${targetMonth}`, date: `${targetMonth}-01`, amount: legacyOpening, proofData: '', proofName: '', note: 'Saldo awal dari data sebelumnya', createdAt: new Date().toISOString() }] : [];
+                const entry = { id: `dep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, date: depositDate, amount: num, proofData: proofData || '', proofName: proofName || '', createdAt: new Date().toISOString() };
+                const nextEntries = [...openingEntry, ...previousEntries, entry];
+                const nextHistory = { ...monthlyDepositHistory, [targetMonth]: nextEntries };
+                const updated = { ...monthlyDeposits, [targetMonth]: nextEntries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) };
                 setMonthlyDeposits(updated);
+                setMonthlyDepositHistory(nextHistory);
                 safeStorageSet('etoll_monthly_deposits', JSON.stringify(updated));
-                pushToCloud('monthlyDeposits', updated);
-                showToastNotification(`Deposit Kasbon ${targetMonth} berhasil diatur ke ${formatRupiah(num)}!`);
+                safeStorageSet('etoll_monthly_deposit_history', JSON.stringify(nextHistory));
+                const results = await Promise.all([pushToCloud('monthlyDeposits', updated), pushToCloud(`monthlyDepositHistory/${targetMonth}`, nextHistory[targetMonth])]);
+                if (results.some(x => x === false)) {
+                    showToastNotification(`Deposit ${targetMonth} tersimpan lokal, tetapi sinkronisasi Firebase gagal.`, 'error');
+                    return false;
+                }
+                showToastNotification(`Pengisian kasbon ${formatDateIndo(depositDate)} sebesar ${formatRupiah(num)} berhasil disimpan.`);
+                return true;
             };
 
             const openDepositModalForMonth = (m) => {
                 const target = (!m || m === 'ALL') ? currentYearMonth : m;
                 setDepositModalMonth(target);
-                setDepositModalValue(String(monthlyDeposits[target] ?? 20000000));
+                setEditingDepositId(null);
+                setDepositModalValue('');
+                setDepositModalDate(getLocalDateString().slice(0,7) === target ? getLocalDateString() : `${target}-01`);
+                setDepositProofData('');
+                setDepositProofName('');
                 setShowDepositModal(true);
+            };
+
+            const persistDepositHistory = async (month, entries, successMessage) => {
+                const nextHistory = { ...monthlyDepositHistory, [month]: entries };
+                const total = entries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+                const nextDeposits = { ...monthlyDeposits, [month]: total };
+                setMonthlyDepositHistory(nextHistory);
+                setMonthlyDeposits(nextDeposits);
+                safeStorageSet('etoll_monthly_deposit_history', JSON.stringify(nextHistory));
+                safeStorageSet('etoll_monthly_deposits', JSON.stringify(nextDeposits));
+                const results = await Promise.all([
+                    pushToCloud('monthlyDeposits', nextDeposits),
+                    pushToCloud(`monthlyDepositHistory/${month}`, entries)
+                ]);
+                if (results.some(x => x === false)) {
+                    showToastNotification('Perubahan riwayat tersimpan lokal, tetapi sinkronisasi Firebase gagal.', 'error');
+                    return false;
+                }
+                showToastNotification(successMessage);
+                return true;
+            };
+
+            const startEditDeposit = (month, item) => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengedit riwayat deposit.', 'info'); return; }
+                if (String(item.id || '').startsWith('opening_')) {
+                    showToastNotification('Saldo awal bawaan tidak dapat diedit sebagai setoran. Tambahkan setoran baru untuk koreksi.', 'info');
+                    return;
+                }
+                setDepositModalMonth(month);
+                setDepositModalValue(String(item.amount || 0));
+                setDepositModalDate(item.date || `${month}-01`);
+                setDepositProofData(item.proofData || '');
+                setDepositProofName(item.proofName || '');
+                setEditingDepositId(item.id);
+            };
+
+            const saveDepositEdit = async () => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengedit riwayat deposit.', 'info'); return false; }
+                const month = depositModalMonth;
+                const amount = Math.max(0, Number(depositModalValue) || 0);
+                if (!editingDepositId || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(depositModalDate) || depositModalDate.slice(0,7) !== month) {
+                    showToastNotification('Periksa nominal dan tanggal pengisian.', 'error'); return false;
+                }
+                const entries = (monthlyDepositHistory[month] || []).map(item => item.id === editingDepositId
+                    ? { ...item, amount, date: depositModalDate, proofData: depositProofData || item.proofData || '', proofName: depositProofName || item.proofName || '', updatedAt: new Date().toISOString() }
+                    : item);
+                const ok = await persistDepositHistory(month, entries, 'Riwayat pengisian berhasil diperbarui.');
+                if (ok) setEditingDepositId(null);
+                return ok;
+            };
+
+            const deleteDepositEntry = async (month, item) => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk menghapus riwayat deposit.', 'info'); return; }
+                if (String(item.id || '').startsWith('opening_')) {
+                    showToastNotification('Saldo awal bawaan tidak dapat dihapus dari riwayat.', 'info'); return;
+                }
+                if (!window.confirm(`Hapus pengisian ${formatDateIndo(item.date)} sebesar ${formatRupiah(item.amount)}?`)) return;
+                const entries = (monthlyDepositHistory[month] || []).filter(row => row.id !== item.id);
+                await persistDepositHistory(month, entries, 'Riwayat pengisian berhasil dihapus.');
+                if (editingDepositId === item.id) setEditingDepositId(null);
             };
 
             const pushToCloud = async (path, data) => {
@@ -2664,6 +2849,7 @@
                 try {
                     const paths = ['spjProfile', 'cards', 'monthlyDeposits'];
                     const results = await Promise.all([
+                        fetch(`${baseUrl}/monthlyDepositHistory/${monthKey}.json`, { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`monthlyDepositHistory/${monthKey}: HTTP ${r.status}`); return ['depositHistory', await r.json()]; }),
                         fetch(`${baseUrl}/transactionsByMonth/${monthKey}.json`, { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactionsByMonth/${monthKey}: HTTP ${r.status}`); return ['monthlyTx', await r.json()]; }),
                         fetch(legacyUrl.toString(), { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactions lama ${monthKey}: HTTP ${r.status}`); return ['legacyTx', await r.json()]; }),
                         ...paths.map(async path => { const r = await fetch(`${baseUrl}/${path}.json`, {cache:'no-store'}); if(!r.ok) throw new Error(`${path}: HTTP ${r.status}`); return [path, await r.json()]; })
@@ -2677,6 +2863,10 @@
                         } else if (path === 'spjProfile' && data) setSpjProfile(prev => ({ ...prev, ...data }));
                         else if (path === 'cards') { const cloudCards = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.keys(data).map(key => ({ id:key, ...data[key] })).filter(Boolean) : []); const deleted = new Set((JSON.parse(safeStorageGet('etoll_deleted_cards') || '[]') || []).map(n => String(n).replace(/\D/g, ''))); setCards(cloudCards.filter(c => !deleted.has(String(c?.number || '').replace(/\D/g, '')))); }
                         else if (path === 'monthlyDeposits' && data) setMonthlyDeposits(data);
+                        else if (path === 'depositHistory') {
+                            const history = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
+                            setMonthlyDepositHistory(prev => ({ ...prev, [monthKey]: history }));
+                        }
                     }
                     monthly = [...byId.values()];
                     setTransactions(prev => {
@@ -2707,6 +2897,7 @@
             React.useEffect(() => { safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl); }, [gdriveWebhookUrl]);
             React.useEffect(() => { safeStorageSet('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
             React.useEffect(() => { safeStorageSet('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
+            React.useEffect(() => { safeStorageSet('etoll_monthly_deposit_history', JSON.stringify(monthlyDepositHistory)); }, [monthlyDepositHistory]);
 
             const showToastNotification = (msg, type = 'success') => {
                 setToast({ msg, type });
@@ -2821,7 +3012,7 @@
             };
 
             const handleExportExcel = () => {
-                const currentDeposit = monthlyDeposits[selectedMonth] || 0;
+                const currentDeposit = depositAvailable;
                 const totalSpent = monthlyTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
                 const balance = currentDeposit - totalSpent;
 
@@ -2903,12 +3094,12 @@
                 setM.add('2026-08');
                 setM.add('2026-09');
                 transactions.forEach(t => {
-                    if (t.date && t.date.length >= 7) {
-                        setM.add(t.date.substring(0, 7));
-                    }
+                    if (t.date && t.date.length >= 7) setM.add(t.date.substring(0, 7));
                 });
+                Object.keys(monthlyDeposits || {}).forEach(m => setM.add(m));
+                Object.keys(monthlyDepositHistory || {}).forEach(m => setM.add(m));
                 return Array.from(setM).sort().reverse();
-            }, [transactions]);
+            }, [transactions, monthlyDeposits, monthlyDepositHistory]);
 
             // Perbaikan Bug 5: Pisahkan transaksi per bulan (untuk Dashboard & SPJ) dari pencarian spesifik tabel
             const monthlyTransactions = React.useMemo(() => {
@@ -3019,8 +3210,28 @@
                 return list;
             }, [cardBreakdown, spjSortBy]);
 
-            const activeDeposit = monthlyDeposits[selectedMonth] || 0;
-            const depositBalance = activeDeposit - monthTotalSpent;
+            const depositLedgerMonths = Array.from(new Set([
+                ...Object.keys(monthlyDeposits || {}),
+                ...Object.keys(monthlyDepositHistory || {}),
+                ...(transactions || []).map(t => String(t.date || '').slice(0,7)).filter(m => /^\\d{4}-\\d{2}$/.test(m))
+            ])).filter(m => /^\\d{4}-\\d{2}$/.test(m)).sort();
+            let carriedDepositBalance = 0;
+            depositLedgerMonths.filter(m => m < selectedMonth).forEach(m => {
+                const entries = monthlyDepositHistory[m] || [];
+                const depositsInMonth = entries.length
+                    ? entries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+                    : (Number(monthlyDeposits[m]) || 0);
+                const spentInMonth = (transactions || []).filter(t => String(t.date || '').startsWith(m)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                carriedDepositBalance += depositsInMonth - spentInMonth;
+            });
+            const activeDeposit = (monthlyDepositHistory[selectedMonth] || []).length
+                ? (monthlyDepositHistory[selectedMonth] || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+                : (Number(monthlyDeposits[selectedMonth]) || 0);
+            // Saldo awal bulan berjalan berasal dari saldo akhir seluruh bulan sebelumnya.
+            // Termasuk kekurangan kasbon (saldo negatif), bukan pengisian baru.
+            const openingDepositBalance = carriedDepositBalance;
+            const depositAvailable = openingDepositBalance + activeDeposit;
+            const depositBalance = depositAvailable - monthTotalSpent;
 
             // Analisis Pengeluaran Berdasarkan Bank Penerbit Kartu
             const bankBreakdown = React.useMemo(() => {
@@ -3052,7 +3263,7 @@
             }, [monthlyTransactions]);
 
             // Hitung Rasio Penyerapan Kasbon
-            const absorptionPercent = activeDeposit > 0 ? Math.min(100, Math.round((monthTotalSpent / activeDeposit) * 100)) : 0;
+            const absorptionPercent = depositAvailable > 0 ? Math.min(100, Math.round((monthTotalSpent / depositAvailable) * 100)) : 0;
             const isLiveMonthActive = selectedMonth === currentYearMonth;
 
             return (
@@ -3094,6 +3305,12 @@
                                     <i className={`fa-solid ${isAdminMode ? 'fa-lock-open' : 'fa-user-shield'} text-xs`}></i>
                                     <span>{isAdminMode ? 'Keluar Admin' : 'Mode Admin'}</span>
                                 </button>
+                                {isAdminMode && (
+                                    <button onClick={() => { setCurrentAdminPassword(''); setNewAdminPassword(''); setConfirmNewAdminPassword(''); setChangePasswordError(''); setShowChangeAdminPassword(true); }}
+                                        className="font-bold px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20">
+                                        <i className="fa-solid fa-key"></i><span>Ganti Password</span>
+                                    </button>
+                                )}
                             </div>
                         </div>
 
@@ -3149,6 +3366,29 @@
                                 <div className="flex gap-2">
                                     <button onClick={() => { setShowAdminLogin(false); setAdminPasswordInput(''); setAdminPassError(''); }} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
                                     <button onClick={confirmAdminLogin} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"><i className="fa-solid fa-unlock mr-1"></i>Masuk Admin</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showChangeAdminPassword && (
+                        <div className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-3 backdrop-blur-md">
+                            <div className="glass-panel w-full max-w-md p-5 rounded-2xl border border-emerald-500/40 space-y-4 shadow-2xl">
+                                <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                                    <h3 className="font-black text-emerald-300"><i className="fa-solid fa-key mr-2"></i>Ganti Password Admin</h3>
+                                    <button onClick={() => setShowChangeAdminPassword(false)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-xmark"></i></button>
+                                </div>
+                                <p className="text-xs text-slate-400">Password baru minimal 8 karakter dan disimpan sebagai hash SHA-256 di Firebase.</p>
+                                <label className="block text-xs font-bold text-slate-300">Password saat ini</label>
+                                <input type="password" autoComplete="current-password" value={currentAdminPassword} onChange={e => setCurrentAdminPassword(e.target.value)} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                <label className="block text-xs font-bold text-slate-300">Password baru</label>
+                                <input type="password" autoComplete="new-password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                <label className="block text-xs font-bold text-slate-300">Ulangi password baru</label>
+                                <input type="password" autoComplete="new-password" value={confirmNewAdminPassword} onChange={e => setConfirmNewAdminPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveAdminPasswordChange(); }} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                {changePasswordError && <p className="text-xs text-rose-400 font-bold">{changePasswordError}</p>}
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowChangeAdminPassword(false)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold">Batal</button>
+                                    <button onClick={saveAdminPasswordChange} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Simpan Password</button>
                                 </div>
                             </div>
                         </div>
@@ -3250,7 +3490,7 @@
                                                 <div className="flex items-center gap-2">
                                                     <p className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">Deposit Kasbon Uang Muka</p>
                                                     <button 
-                                                        onClick={() => openDepositModalForMonth(selectedMonth)} 
+                                                        onClick={() => { if (!isAdminMode) { openAdminLogin(); showToastNotification('Masuk Mode Admin untuk mengedit Deposit Kasbon.', 'info'); return; } openDepositModalForMonth(selectedMonth); }} 
                                                         className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] font-bold border border-purple-500/30 transition flex items-center gap-1 shadow-sm"
                                                         title="Ubah Nominal Kasbon"
                                                     >
@@ -3260,6 +3500,8 @@
                                                 <h3 className="text-2xl font-black text-white mt-2 tracking-tight">
                                                     {formatRupiah(activeDeposit)}
                                                 </h3>
+                                                <p className="text-[11px] text-slate-400 mt-1">Saldo awal (sisa saldo bulan sebelumnya): <strong className={carriedDepositBalance < 0 ? 'text-rose-300' : 'text-emerald-300'}>{formatRupiah(carriedDepositBalance)}</strong></p>
+                                                <p className="text-[11px] text-slate-300 mt-0.5">Total dana tersedia: <strong className="text-white">{formatRupiah(depositAvailable)}</strong></p>
                                             </div>
                                             <div className="w-9 h-9 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm shadow-inner">
                                                 <i className="fa-solid fa-vault"></i>
@@ -3757,10 +3999,6 @@
                                                     const target = selectedMonth === 'ALL' ? currentYearMonth : selectedMonth;
                                                     setMonthlyDeposits(prev => ({ ...prev, [target]: val }));
                                                 }}
-                                                onBlur={(e) => {
-                                                    const target = selectedMonth === 'ALL' ? currentYearMonth : selectedMonth;
-                                                    handleUpdateDeposit(target, e.target.value);
-                                                }}
                                                 className="p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm w-44 focus:ring-2 focus:ring-brand-500"
                                             />
                                             <button
@@ -4180,7 +4418,7 @@
                             spjProfile={spjProfile}
                             selectedMonth={selectedMonth}
                             transactions={transactions}
-                            depositAmount={monthlyDeposits[selectedMonth] || 0}
+                            depositAmount={depositAvailable}
                             cards={cards}
                             spjSortBy={spjSortBy}
                             setSpjSortBy={setSpjSortBy}
@@ -4222,26 +4460,42 @@
                     )}
 
                     {showDepositModal && (
-                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md modal-backdrop">
-                            <div className="glass-panel p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-purple-500/50">
+                        <div className="fixed inset-0 z-50 bg-black/85 flex items-start sm:items-center justify-center p-2 sm:p-4 backdrop-blur-md modal-backdrop overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                            <div className="glass-panel p-4 sm:p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-purple-500/50 my-auto" style={{ maxHeight: 'calc(100vh - 1rem)', overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
                                 <div className="flex justify-between items-center border-b border-slate-800 pb-3">
                                     <h3 className="font-extrabold text-base flex items-center gap-2 text-purple-300">
-                                        <i className="fa-solid fa-vault"></i> Edit Deposit Kasbon Uang Muka
+                                        <i className="fa-solid fa-vault"></i> {editingDepositId ? 'Edit Riwayat Pengisian' : 'Deposit Kasbon Uang Muka'}
                                     </h3>
-                                    <button onClick={() => setShowDepositModal(false)} className="text-slate-400 hover:text-white text-lg">
+                                    <button onClick={() => { setShowDepositModal(false); setEditingDepositId(null); }} className="text-slate-400 hover:text-white text-lg">
                                         <i className="fa-solid fa-xmark"></i>
                                     </button>
                                 </div>
 
                                 <div className="space-y-4 text-xs">
+                                    <div className="p-3 rounded-xl border border-purple-500/30 bg-purple-500/10">
+                                        <p className="text-[11px] font-bold text-purple-200">Saldo awal dari sisa saldo bulan sebelumnya</p>
+                                        <p className={`font-mono font-black text-lg ${openingDepositBalance < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{formatRupiah(openingDepositBalance)}</p>
+                                        <p className="text-[10px] text-slate-400">Saldo awal bukan setoran baru. Saldo akhir = saldo awal + total pengisian − realisasi e-Toll.</p>
+                                    </div>
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-300 mb-1">Periode Bulan:</label>
                                         <select
                                             value={depositModalMonth}
-                                            onChange={(e) => {
+                                            onChange={async (e) => {
                                                 const m = e.target.value;
                                                 setDepositModalMonth(m);
-                                                setDepositModalValue(String(monthlyDeposits[m] ?? 20000000));
+                                                setDepositModalValue('');
+                                                setDepositModalDate(getLocalDateString().slice(0,7) === m ? getLocalDateString() : `${m}-01`);
+                                                if (firebaseProjectId) {
+                                                    try {
+                                                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/monthlyDepositHistory/${m}.json`;
+                                                        const response = await fetch(url, { cache: 'no-store' });
+                                                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                                        const data = await response.json();
+                                                        const history = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
+                                                        setMonthlyDepositHistory(prev => ({ ...prev, [m]: history }));
+                                                    } catch (err) { showToastNotification('Riwayat bulan tersebut belum berhasil dimuat dari Firebase.', 'error'); }
+                                                }
                                             }}
                                             className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-amber-300 font-bold"
                                         >
@@ -4252,12 +4506,12 @@
                                     </div>
 
                                     <div>
-                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Nominal Deposit Kasbon (Rp):</label>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">{editingDepositId ? 'Ubah Nominal Pengisian (Rp):' : 'Nominal Pengisian Baru (Rp):'}</label>
                                         <input 
                                             type="number"
                                             value={depositModalValue}
                                             onChange={(e) => setDepositModalValue(e.target.value)}
-                                            placeholder="Contoh: 20000000"
+                                            placeholder="Masukkan nominal pengisian baru, mis. 5000000"
                                             className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-base font-bold focus:ring-2 focus:ring-purple-500"
                                             autoFocus
                                         />
@@ -4265,6 +4519,38 @@
                                             <i className="fa-solid fa-money-bill-wave"></i>
                                             <span>Terbaca: {formatRupiah(Number(depositModalValue) || 0)}</span>
                                         </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Tanggal Pengisian:</label>
+                                        <input type="date" value={depositModalDate} onChange={e => setDepositModalDate(e.target.value)} className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Bukti Pengisian (JPG/JPEG):</label>
+                                        <input type="file" accept="image/jpeg,image/jpg" onChange={async e => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (!/^image\/(jpeg|jpg)$/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) { showToastNotification('Bukti harus berupa JPG/JPEG.', 'error'); e.target.value = ''; return; }
+                                            if (file.size > 12 * 1024 * 1024) { showToastNotification('Ukuran JPG maksimal 12 MB.', 'error'); e.target.value = ''; return; }
+                                            try {
+                                                const reader = new FileReader();
+                                                reader.onload = async ev => {
+                                                    try { const compressed = await compressImageDataUrl(ev.target.result, 1100, 0.62); setDepositProofData(compressed); setDepositProofName(file.name); }
+                                                    catch (err) { showToastNotification(err.message || 'Gagal membaca bukti JPG.', 'error'); }
+                                                };
+                                                reader.readAsDataURL(file);
+                                            } catch (err) { showToastNotification('Gagal memproses bukti JPG.', 'error'); }
+                                        }} className="block w-full text-[11px] text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white" />
+                                        {depositProofData && <div className="mt-2 flex items-center gap-3 rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-2"><img src={depositProofData} alt="Preview bukti deposit" className="w-16 h-16 object-cover rounded-lg" /><div className="min-w-0 flex-1"><p className="text-[10px] text-emerald-300 font-bold">Bukti siap disimpan</p><p className="text-[10px] text-slate-400 truncate">{depositProofName}</p></div><button type="button" onClick={() => { setDepositProofData(''); setDepositProofName(''); }} className="text-rose-300 text-xs">Hapus</button></div>}
+                                        <p className="text-[10px] text-slate-500 mt-1">Gambar dikompres otomatis agar ukuran penyimpanan lebih hemat.</p>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3 space-y-2">
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-purple-300">Riwayat Pengisian {depositModalMonth}</p>
+                                        <div className="flex justify-between items-center rounded-lg bg-purple-500/10 px-2.5 py-2">
+                                            <span className="text-[10px] text-slate-300">Total pengisian bulan ini</span>
+                                            <strong className="text-sm text-emerald-300 font-mono">{formatRupiah((monthlyDepositHistory[depositModalMonth] || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0) + ((monthlyDepositHistory[depositModalMonth] || []).length ? 0 : (Number(monthlyDeposits[depositModalMonth]) || 0)))}</strong>
+                                        </div>
+                                        {(monthlyDepositHistory[depositModalMonth] || []).length === 0 ? <p className="text-[11px] text-slate-500">Belum ada riwayat pengisian pada bulan ini.</p> : <div className="max-h-52 overflow-y-auto space-y-2">{[...(monthlyDepositHistory[depositModalMonth] || [])].sort((a,b) => String(b.date).localeCompare(String(a.date))).map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2 text-[11px]"><div className="min-w-0"><p className="font-bold text-white">{formatDateIndo(item.date)}{String(item.id || '').startsWith('opening_') ? ' · Saldo awal' : ''}</p><p className="text-emerald-300 font-mono">{formatRupiah(item.amount)}</p>{item.proofName && <p className="text-[9px] text-slate-500 truncate">{item.proofName}</p>}</div><div className="flex items-center gap-2">{item.proofData ? <a href={item.proofData} target="_blank" rel="noreferrer" className="text-blue-300 underline">Lihat JPG</a> : <span className="text-slate-500">Tanpa bukti</span>}{!String(item.id || '').startsWith('opening_') && <><button type="button" onClick={() => startEditDeposit(depositModalMonth, item)} className="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 hover:bg-amber-500/30 font-bold"><i className="fa-solid fa-pen"></i> Edit</button><button type="button" onClick={() => deleteDepositEntry(depositModalMonth, item)} className="px-2 py-1 rounded-md bg-rose-500/15 text-rose-300 hover:bg-rose-500/30 font-bold"><i className="fa-solid fa-trash"></i> Hapus</button></>}</div></div>)}</div>}
                                     </div>
 
                                     <div>
@@ -4291,20 +4577,25 @@
                                 <div className="flex gap-2 pt-2 border-t border-slate-800">
                                     <button 
                                         type="button" 
-                                        onClick={() => setShowDepositModal(false)} 
+                                        onClick={() => { setShowDepositModal(false); setEditingDepositId(null); }} 
                                         className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800"
                                     >
                                         Batal
                                     </button>
                                     <button 
                                         type="button" 
-                                        onClick={() => {
-                                            handleUpdateDeposit(depositModalMonth, depositModalValue);
-                                            setShowDepositModal(false);
+                                        disabled={depositSaving}
+                                        onClick={async () => {
+                                            setDepositSaving(true);
+                                            const ok = editingDepositId
+                                                ? await saveDepositEdit()
+                                                : await handleUpdateDeposit(depositModalMonth, depositModalValue, depositModalDate, depositProofData, depositProofName);
+                                            setDepositSaving(false);
+                                            if (ok) { setDepositProofData(''); setDepositProofName(''); setEditingDepositId(null); setDepositModalValue(''); }
                                         }} 
-                                        className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                                        className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg transition"
                                     >
-                                        Simpan Kasbon
+                                        {depositSaving ? 'Menyimpan…' : (editingDepositId ? 'Simpan Perubahan' : 'Simpan Pengisian')}
                                     </button>
                                 </div>
                             </div>
