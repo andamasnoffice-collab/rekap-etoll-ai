@@ -569,49 +569,18 @@
                     throw err;
                 } finally { clearTimeout(timer); }
             };
-            // Baca transaksi lama per halaman agar tidak meminta seluruh /transactions sekaligus.
-            const readLegacyTransactionsPaged = async (base, onProgress) => {
-                const all = []; const seenKeys = new Set(); let cursor = null; const pageSize = 250; let page = 0;
-                while (true) {
-                    const params = new URLSearchParams({ orderBy: '"$key"', limitToFirst: String(pageSize) });
-                    if (cursor !== null) params.set('startAt', JSON.stringify(cursor));
-                    const data = await readMigrationJson(`${base}/transactions.json?${params.toString()}`);
-                    if (!data || typeof data !== 'object') break;
-                    const entries = Array.isArray(data) ? data.map((v,i)=>[String(i),v]) : Object.entries(data);
-                    const fresh = entries.filter(([key]) => !seenKeys.has(key));
-                    if (!fresh.length) break;
-                    for (const [key, value] of fresh) {
-                        seenKeys.add(key);
-                        if (value && typeof value === 'object') all.push({ ...value, id: String(value.id ?? key) });
-                    }
-                    cursor = fresh[fresh.length - 1][0]; page++;
-                    if (onProgress) onProgress(all.length, page);
-                    if (entries.length < pageSize) break;
-                    if (page > 10000) throw new Error('Pemeriksaan dihentikan karena jumlah halaman tidak wajar.');
-                }
-                return all;
-            };
             const inspectMigration = async () => {
-                setMigrationBusy(true); setMigrationReport(null); setMigrationProgress('Menghubungi Firebase dan membaca transaksi lama per 250 data…');
-                try {
-                    const base = migrationBase();
-                    const oldList = await readLegacyTransactionsPaged(base, (count, page) => setMigrationProgress(`Membaca transaksi lama: ${count} data (${page} halaman)…`));
-                    const groups = {};
-                    let invalid = 0;
-                    oldList.forEach(tx => { const m = monthOfTx(tx); if (!m) { invalid++; return; } (groups[m] ||= []).push(tx); });
-                    const months = Object.keys(groups).sort();
-                    const preview = [];
-                    for (const month of months) {
-                        const existing = normalizeTxList(await readMigrationJson(`${base}/transactionsByMonth/${month}.json`));
-                        const existingIds = new Set(existing.map(tx => String(tx.id)));
-                        const newCount = groups[month].filter(tx => !existingIds.has(String(tx.id))).length;
-                        preview.push({ month, oldCount: groups[month].length, targetCount: existing.length, newCount, sourceAmount: groups[month].reduce((a,tx)=>a+(Number(tx.amount)||0),0) });
-                    }
-                    const report = { sourceCount: oldList.length, validCount: oldList.length-invalid, invalidCount: invalid, months: preview.length, rows: preview, status: 'preview' };
-                    setMigrationPreview({ groups, rows: preview }); setMigrationReport(report);
-                    setMigrationProgress('Pemeriksaan selesai. Belum ada data yang diubah.');
-                } catch (e) { setMigrationProgress(`Pemeriksaan gagal: ${e.message || e}`); }
-                finally { setMigrationBusy(false); }
+                setMigrationPreview(null);
+                setMigrationReport({
+                    status: 'already_migrated',
+                    sourceCount: 0,
+                    validCount: 0,
+                    invalidCount: 0,
+                    months: 0,
+                    rows: []
+                });
+                setMigrationProgress('Migrasi legacy tidak diperlukan: sumber transaksi resmi sekarang hanya transactionsByMonth. Pemeriksaan /transactions lama dinonaktifkan.');
+                showToastNotification('Pembacaan transaksi legacy dinonaktifkan. Gunakan transactionsByMonth.', 'info');
             };
             const runMigration = async () => {
                 if (!migrationPreview || !migrationReport) { showToastNotification('Jalankan pemeriksaan awal terlebih dahulu.', 'error'); return; }
@@ -760,7 +729,12 @@
                     if (hasTxChanges) {
                         setTransactions(updatedTxs);
                         safeStorageSet('etoll_transactions', JSON.stringify(updatedTxs));
-                        Promise.all(updatedTxs.map(t => pushToCloud(`transactions/${t.id}`, t)));
+                        Promise.all(updatedTxs.map(t => {
+                            const monthKey = String(t.date || '').slice(0, 7);
+                            return monthKey
+                                ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t)
+                                : Promise.resolve(false);
+                        }));
                     }
                 }
 
@@ -2437,8 +2411,10 @@
                 return INITIAL_DUMMY_TXS;
             });
 
-            const [firebaseProjectId, setFirebaseProjectId] = React.useState(() => { const savedPid = safeStorageGet('etoll_fb_pid'); return savedPid || 'etoll-3366c'; });
-            const [tempFbPid, setTempFbPid] = React.useState(() => { const savedPid = safeStorageGet('etoll_fb_pid'); return savedPid || 'etoll-3366c'; });
+            // Konfigurasi Firebase ditanam langsung pada aplikasi; tidak membaca ID dari halaman atau localStorage.
+            const FIREBASE_PROJECT_ID = 'etoll-3366c';
+            const [firebaseProjectId] = React.useState(FIREBASE_PROJECT_ID);
+            const [cloudMonthKeys, setCloudMonthKeys] = React.useState([]);
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
             const [gdriveWebhookUrl, setGdriveWebhookUrl] = React.useState(() => safeStorageGet('etoll_gdrive_webhook') || '');
 
@@ -2833,52 +2809,122 @@
             }, [transactions, deletedCardNumbers, cards]);
 
             const fetchCloudData = React.useCallback(async (pidOverride = null, monthOverride = null) => {
-                const targetPid = (pidOverride !== null ? pidOverride : firebaseProjectId).trim();
-                if (!targetPid) { setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif' }); return false; }
+                const targetPid = String(pidOverride !== null ? pidOverride : firebaseProjectId).trim();
+                if (!targetPid) {
+                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — Project ID belum tersedia' });
+                    return false;
+                }
+
                 const baseUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
                 const now = new Date();
                 const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-                const monthKey = (monthOverride || selectedMonth || currentMonth) === 'ALL' ? currentMonth : (monthOverride || selectedMonth || currentMonth);
-                console.info('[Firebase] Memuat data bulan terpilih:', monthKey, '(tanpa polling/realtime permanen)');
-                const [year, month] = monthKey.split('-');
-                const lastDay = new Date(Number(year), Number(month), 0).getDate();
-                const legacyUrl = new URL(`${baseUrl}/transactions.json`);
-                legacyUrl.searchParams.set('orderBy', '"date"');
-                legacyUrl.searchParams.set('startAt', JSON.stringify(`${monthKey}-01`));
-                legacyUrl.searchParams.set('endAt', JSON.stringify(`${monthKey}-${lastDay}`));
+                const monthKey = (monthOverride || selectedMonth || currentMonth) === 'ALL'
+                    ? currentMonth : (monthOverride || selectedMonth || currentMonth);
+                const readJson = async (path, query = '') => {
+                    const response = await fetch(`${baseUrl}/${path}.json${query}`, {
+                        cache: 'no-store',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) {
+                        let detail = '';
+                        try { detail = await response.text(); } catch (_) {}
+                        throw new Error(`${path}: HTTP ${response.status}${detail ? ' — ' + detail.slice(0,160) : ''}`);
+                    }
+                    return await response.json();
+                };
+
+                console.info('[Firebase] Memeriksa koneksi dan memuat bulan:', monthKey);
+                setSyncStatus({ state: 'connecting', msg: `Menghubungkan ke Firebase ${targetPid}…` });
+
                 try {
-                    const paths = ['spjProfile', 'cards', 'monthlyDeposits'];
+                    // Sumber transaksi resmi hanya transactionsByMonth.
+                    // Jalur /transactions lama sudah dihapus dan tidak boleh diminta lagi.
                     const results = await Promise.all([
-                        fetch(`${baseUrl}/monthlyDepositHistory/${monthKey}.json`, { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`monthlyDepositHistory/${monthKey}: HTTP ${r.status}`); return ['depositHistory', await r.json()]; }),
-                        fetch(`${baseUrl}/transactionsByMonth/${monthKey}.json`, { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactionsByMonth/${monthKey}: HTTP ${r.status}`); return ['monthlyTx', await r.json()]; }),
-                        fetch(legacyUrl.toString(), { cache: 'no-store' }).then(async r => { if(!r.ok) throw new Error(`transactions lama ${monthKey}: HTTP ${r.status}`); return ['legacyTx', await r.json()]; }),
-                        ...paths.map(async path => { const r = await fetch(`${baseUrl}/${path}.json`, {cache:'no-store'}); if(!r.ok) throw new Error(`${path}: HTTP ${r.status}`); return [path, await r.json()]; })
+                        readJson(`monthlyDepositHistory/${monthKey}`).then(data => ['depositHistory', data]),
+                        readJson(`transactionsByMonth/${monthKey}`).then(data => ['monthlyTx', data]),
+                        readJson('spjProfile').then(data => ['spjProfile', data]),
+                        readJson('cards').then(data => ['cards', data]),
+                        readJson('monthlyDeposits').then(data => ['monthlyDeposits', data])
                     ]);
-                    let monthly = [];
+
                     const byId = new Map();
                     for (const [path, data] of results) {
-                        if (path === 'monthlyTx' || path === 'legacyTx') {
-                            const list = data && typeof data === 'object' ? (Array.isArray(data) ? data.filter(Boolean).map((tx,i)=>({id:tx.id ?? String(i), ...tx})) : Object.keys(data).map(key=>({id:key, ...(data[key]||{})})).filter(tx=>tx && tx.id)) : [];
-                            list.forEach(tx => { if (String(tx.date || '').slice(0,7) === monthKey) byId.set(String(tx.id), tx); });
-                        } else if (path === 'spjProfile' && data) setSpjProfile(prev => ({ ...prev, ...data }));
-                        else if (path === 'cards') { const cloudCards = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.keys(data).map(key => ({ id:key, ...data[key] })).filter(Boolean) : []); const deleted = new Set((JSON.parse(safeStorageGet('etoll_deleted_cards') || '[]') || []).map(n => String(n).replace(/\D/g, ''))); setCards(cloudCards.filter(c => !deleted.has(String(c?.number || '').replace(/\D/g, '')))); }
-                        else if (path === 'monthlyDeposits' && data) setMonthlyDeposits(data);
-                        else if (path === 'depositHistory') {
-                            const history = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
+                        if (path === 'monthlyTx') {
+                            const list = data && typeof data === 'object'
+                                ? (Array.isArray(data)
+                                    ? data.filter(Boolean).map((tx, i) => ({ ...tx, id: String(tx.id ?? i) }))
+                                    : Object.entries(data).filter(([, tx]) => tx && typeof tx === 'object')
+                                        .map(([key, tx]) => ({ ...tx, id: String(tx.id ?? key) })))
+                                : [];
+                            list.forEach(tx => {
+                                if (String(tx.date || '').slice(0,7) === monthKey) byId.set(String(tx.id), tx);
+                            });
+                        } else if (path === 'spjProfile' && data) {
+                            setSpjProfile(prev => ({ ...prev, ...data }));
+                        } else if (path === 'cards') {
+                            const cloudCards = Array.isArray(data)
+                                ? data.filter(Boolean)
+                                : (data && typeof data === 'object'
+                                    ? Object.entries(data).filter(([, value]) => value && typeof value === 'object')
+                                        .map(([key, value]) => ({ id: key, ...value }))
+                                    : []);
+                            const deleted = new Set((JSON.parse(safeStorageGet('etoll_deleted_cards') || '[]') || [])
+                                .map(n => String(n).replace(/\D/g, '')));
+                            setCards(cloudCards.filter(c => !deleted.has(String(c?.number || '').replace(/\D/g, ''))));
+                        } else if (path === 'monthlyDeposits' && data) {
+                            setMonthlyDeposits(data);
+                        } else if (path === 'depositHistory') {
+                            const history = Array.isArray(data)
+                                ? data.filter(Boolean)
+                                : (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
                             setMonthlyDepositHistory(prev => ({ ...prev, [monthKey]: history }));
                         }
                     }
-                    monthly = [...byId.values()];
+
+                    const monthly = [...byId.values()];
                     setTransactions(prev => {
                         const outsideMonth = prev.filter(tx => String(tx.date || '').slice(0,7) !== monthKey);
                         const merged = [...outsideMonth, ...monthly];
                         const unique = new Map(merged.map(tx => [String(tx.id), tx]));
-                        return [...unique.values()].sort((a,b)=>new Date(b.date||0)-new Date(a.date||0));
+                        return [...unique.values()].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
                     });
-                    setSyncStatus({ state: 'success', msg: `Firebase tersinkronisasi — data ${monthKey} dimuat` });
+
+                    setSyncStatus({
+                        state: 'success',
+                        msg: `Database TERHUBUNG — berhasil membaca ${targetPid}; ${monthly.length} transaksi dari transactionsByMonth/${monthKey}.`
+                    });
+                    console.info('[Firebase] Koneksi baca berhasil:', targetPid, 'transaksi:', monthly.length);
                     return true;
-                } catch (e) { setSyncStatus({ state: 'error', msg: e.message || 'Gagal terhubung ke Firebase' }); return false; }
+                } catch (e) {
+                    const message = e?.message || 'Gagal membaca Firebase';
+                    setSyncStatus({ state: 'error', msg: `Database TIDAK TERHUBUNG / baca gagal: ${message}` });
+                    console.error('[Firebase] Pemeriksaan koneksi gagal:', message);
+                    return false;
+                }
             }, [firebaseProjectId, selectedMonth]);
+
+            // Temukan daftar bulan yang benar-benar tersedia di Firebase tanpa mengunduh isi transaksi.
+            // shallow=true hanya mengambil nama node bulan, bukan seluruh record.
+            React.useEffect(() => {
+                let cancelled = false;
+                const discoverCloudMonths = async () => {
+                    try {
+                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/transactionsByMonth.json?shallow=true`;
+                        const response = await fetch(url, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const data = await response.json();
+                        const months = data && typeof data === 'object'
+                            ? Object.keys(data).filter(key => /^\d{4}-\d{2}$/.test(key))
+                            : [];
+                        if (!cancelled) setCloudMonthKeys(months);
+                        console.info('[Firebase] Bulan transaksi tersedia:', months);
+                    } catch (error) {
+                        console.warn('[Firebase] Tidak dapat mengambil daftar bulan:', error.message);
+                    }
+                };
+                discoverCloudMonths();
+                return () => { cancelled = true; };
+            }, [firebaseProjectId]);
 
             // Hemat kuota: ambil data saat aplikasi dibuka atau saat bulan/proyek berubah.
             // Tidak memakai polling maupun EventSource permanen. Perubahan dari perangkat lain
@@ -2995,12 +3041,9 @@
                         const targetPid = firebaseProjectId.trim();
                         const monthKey = String(txToDelete?.date || '').slice(0,7);
                         const base = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
-                        const newPath = monthKey ? `${base}/transactionsByMonth/${monthKey}/${id}.json` : '';
-                        let response = newPath ? await fetch(newPath, {method:'DELETE'}) : null;
-                        if (!response || !response.ok) {
-                            // Kompatibilitas untuk transaksi lama yang belum dimigrasikan.
-                            response = await fetch(`${base}/transactions/${id}.json`, {method:'DELETE'});
-                        }
+                        if (!monthKey) throw new Error('Bulan transaksi tidak diketahui; penghapusan dibatalkan.');
+                        const newPath = `${base}/transactionsByMonth/${monthKey}/${encodeURIComponent(id)}.json`;
+                        const response = await fetch(newPath, {method:'DELETE', cache:'no-store'});
                         if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
                         setTransactions(prev => prev.filter(t => String(t.id) !== String(id)));
                         showToastNotification('Transaksi dihapus dari Firebase Database!', 'info');
@@ -3078,14 +3121,12 @@
             };
 
             const handleSaveCloudSettings = async () => {
-                const cleanPid = tempFbPid.trim();
-                setFirebaseProjectId(cleanPid);
-                safeStorageSet('etoll_fb_pid', cleanPid);
+                // Project ID sudah tertanam; panel ini hanya menyimpan layanan tambahan.
                 safeStorageSet('etoll_gemini_key', geminiApiKey);
                 safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl);
-                
-                showToastNotification("Menyimpan & menguji koneksi Realtime DB...");
-                await fetchCloudData(cleanPid);
+
+                showToastNotification("Menguji koneksi Realtime Database...");
+                await fetchCloudData(FIREBASE_PROJECT_ID);
             };
 
             const availableMonths = React.useMemo(() => {
@@ -3098,8 +3139,9 @@
                 });
                 Object.keys(monthlyDeposits || {}).forEach(m => setM.add(m));
                 Object.keys(monthlyDepositHistory || {}).forEach(m => setM.add(m));
+                cloudMonthKeys.forEach(m => setM.add(m));
                 return Array.from(setM).sort().reverse();
-            }, [transactions, monthlyDeposits, monthlyDepositHistory]);
+            }, [transactions, monthlyDeposits, monthlyDepositHistory, cloudMonthKeys]);
 
             // Perbaikan Bug 5: Pisahkan transaksi per bulan (untuk Dashboard & SPJ) dari pencarian spesifik tabel
             const monthlyTransactions = React.useMemo(() => {
@@ -3213,8 +3255,8 @@
             const depositLedgerMonths = Array.from(new Set([
                 ...Object.keys(monthlyDeposits || {}),
                 ...Object.keys(monthlyDepositHistory || {}),
-                ...(transactions || []).map(t => String(t.date || '').slice(0,7)).filter(m => /^\\d{4}-\\d{2}$/.test(m))
-            ])).filter(m => /^\\d{4}-\\d{2}$/.test(m)).sort();
+                ...(transactions || []).map(t => String(t.date || '').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m))
+            ])).filter(m => /^\d{4}-\d{2}$/.test(m)).sort();
             let carriedDepositBalance = 0;
             depositLedgerMonths.filter(m => m < selectedMonth).forEach(m => {
                 const entries = monthlyDepositHistory[m] || [];
@@ -3277,7 +3319,7 @@
                                 <div>
                                     <h1 className="font-black text-xl bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
                                         RekapToll
-                                        <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                                        <span title={syncStatus.msg} className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 cursor-help ${
                                             syncStatus.state === 'success' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
                                             syncStatus.state === 'error' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
                                             'bg-sky-500/20 text-sky-300 border-sky-500/30'
@@ -3286,7 +3328,7 @@
                                                 syncStatus.state === 'success' ? 'bg-emerald-400 animate-pulse' :
                                                 syncStatus.state === 'error' ? 'bg-rose-400' : 'bg-sky-400 animate-spin'
                                             }`}></span>
-                                            <span>{syncStatus.state === 'success' ? 'Cloud Synced' : syncStatus.state === 'error' ? 'Sync Error' : 'Connecting...'}</span>
+                                            <span>{syncStatus.state === 'success' ? 'DB Terhubung' : syncStatus.state === 'error' ? 'DB Error' : 'Menghubungkan…'}</span>
                                         </span>
                                     </h1>
                                 </div>
@@ -4344,14 +4386,12 @@
 
                                 <div className="space-y-4 text-xs">
                                     <div className="space-y-1.5">
-                                        <label className="block text-slate-300 font-bold">Firebase Project ID (Realtime DB):</label>
-                                        <input 
-                                            type="text" 
-                                            value={tempFbPid} 
-                                            onChange={e => setTempFbPid(e.target.value)}
-                                            placeholder="Contoh: etoll-3366c"
-                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
-                                        />
+                                        <label className="block text-slate-300 font-bold">Firebase Realtime Database — tertanam di aplikasi:</label>
+                                        <div className="w-full p-3 rounded-xl border border-emerald-700/60 bg-emerald-950/30 text-emerald-200 font-mono text-sm break-all">
+                                            Project ID: etoll-3366c<br />
+                                            URL: https://etoll-3366c-default-rtdb.asia-southeast1.firebasedatabase.app
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">Tidak perlu mengisi Project ID di halaman muka atau menyimpannya secara manual. Aplikasi langsung memakai database ini.</p>
                                     </div>
 
                                     <div className="space-y-1.5">
