@@ -1,0 +1,2646 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RekapToll - Rekapitulasi SPJ e-Toll & SPBy Resmi UNS</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                            950: '#172554',
+                        },
+                        darkcard: 'rgba(30, 41, 59, 0.75)',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                        doc: ['"Times New Roman"', 'Times', 'serif']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts & FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- React, Babel Standalone & SheetJS -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script>
+      const REKAPTOLL_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyA3Gtz2w1erDlP_FTPTHOes1YZoQ56jJU",
+        authDomain: "rekaptoll-production.firebaseapp.com",
+        databaseURL: "https://rekaptoll-production-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "rekaptoll-production",
+        storageBucket: "rekaptoll-production.firebasestorage.app",
+        messagingSenderId: "441481183431",
+        appId: "1:441481183431:web:d6490b7f1269a6334bfee2"
+      };
+      if (!firebase.apps.length) firebase.initializeApp(REKAPTOLL_FIREBASE_CONFIG);
+      window.rekaptollAuth = firebase.auth();
+      window.rekaptollAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+      const _nativeFetch = window.fetch.bind(window);
+      window.fetch = async (input, init = {}) => {
+        const rawUrl = typeof input === 'string' ? input : input.url;
+        let parsed;
+        try { parsed = new URL(rawUrl, window.location.href); } catch (_) { return _nativeFetch(input, init); }
+        if (!parsed.hostname.endsWith('firebasedatabase.app')) return _nativeFetch(input, init);
+        const user = window.rekaptollAuth.currentUser;
+        if (!user) return new Response(JSON.stringify({ error: 'AUTH_REQUIRED' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        const token = await user.getIdToken();
+        parsed.searchParams.set('auth', token);
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        headers.set('Accept', 'application/json');
+        return _nativeFetch(new Request(parsed.toString(), { ...init, headers }));
+      };
+    </script>
+
+
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background: #090d16;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(37, 99, 235, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(147, 51, 234, 0.15) 0px, transparent 50%),
+                radial-gradient(at 50% 100%, rgba(16, 185, 129, 0.10) 0px, transparent 50%);
+            background-attachment: fixed;
+            color: #f1f5f9;
+        }
+
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+        }
+
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.6); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(51, 65, 85, 0.8); border-radius: 8px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 1); }
+
+        /* Official UNS SPJ Document Paper Styling (Legal Size, Normal Margins) */
+        .official-doc {
+            font-family: "Times New Roman", Times, serif;
+            color: #000;
+            background: #fff;
+            line-height: 1.35;
+            font-size: 10pt;
+        }
+
+        .official-doc table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .official-doc th, .official-doc td {
+            border: 1px solid #000;
+            padding: 4px 6px;
+        }
+
+        .border-none-table td, .border-none-table th {
+            border: none !important;
+            padding: 2px 4px;
+        }
+
+        .legal-sheet {
+            width: 100%;
+            max-width: 216mm;
+            padding: 20mm 20mm;
+            box-sizing: border-box;
+            background: #ffffff;
+            color: #000000;
+            margin: 0 auto 24px auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+        }
+
+        .legal-sheet-narrow {
+            width: 100%;
+            max-width: 216mm;
+            padding: 8mm 10mm;
+            box-sizing: border-box;
+            background: #ffffff;
+            color: #000000;
+            margin: 0 auto 24px auto;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+            border-radius: 2px;
+        }
+
+        .receipt-hd-img {
+            image-rendering: -webkit-optimize-contrast;
+            image-rendering: crisp-edges;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        @media print {
+            @page {
+                size: 216mm 356mm portrait;
+                margin: 10mm 10mm;
+            }
+            header, main, nav, .no-print, .modal-backdrop, .modal-backdrop-bg { 
+                display: none !important; 
+            }
+            body { 
+                background: white !important; 
+                color: black !important; 
+                background-image: none !important; 
+                padding: 0 !important; 
+                margin: 0 !important;
+            }
+            #root { 
+                padding: 0 !important; 
+                margin: 0 !important; 
+            }
+            .print-modal-overlay {
+                position: static !important;
+                background: transparent !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                display: block !important;
+                width: 100% !important;
+                inset: auto !important;
+                overflow: visible !important;
+            }
+            .print-container { 
+                position: relative !important;
+                width: 100% !important; 
+                max-width: 100% !important;
+                margin: 0 !important; 
+                padding: 0 !important; 
+                box-shadow: none !important;
+                border: none !important;
+                background: white !important;
+                color: black !important;
+                border-radius: 0 !important;
+            }
+            .print-scroll-wrapper {
+                max-height: none !important;
+                overflow: visible !important;
+                background: white !important;
+                padding: 0 !important;
+            }
+            .legal-sheet {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                padding: 10mm 10mm !important;
+                box-sizing: border-box !important;
+                background: white !important;
+                color: black !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                margin: 0 auto !important;
+                max-width: 100% !important;
+                min-height: auto !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+            .legal-sheet-narrow {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                page-break-after: always !important;
+                break-after: page !important;
+                padding: 4mm 6mm !important;
+                box-sizing: border-box !important;
+                background: white !important;
+                color: black !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                margin: 0 auto !important;
+                max-width: 100% !important;
+                min-height: auto !important;
+                height: auto !important;
+                overflow: hidden !important;
+            }
+            .legal-sheet:last-child, .legal-sheet-narrow:last-child {
+                page-break-after: auto !important;
+                break-after: auto !important;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-100 min-h-screen transition-colors duration-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        function safeStorageGet(key, fallback = null) {
+            try {
+                const value = localStorage.getItem(key);
+                return value === null ? fallback : value;
+            } catch (e) {
+                console.warn('localStorage read failed:', key, e);
+                return fallback;
+            }
+        }
+
+        function safeStorageSet(key, value) {
+            try {
+                localStorage.setItem(key, value);
+                return true;
+            } catch (e) {
+                console.warn('localStorage write failed:', key, e);
+                return false;
+            }
+        }
+
+        function getLocalDateString(date = new Date()) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function compressImageDataUrl(dataUrl, maxWidth = 1280, quality = 0.72) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const scale = Math.min(1, maxWidth / img.naturalWidth);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                    const ctx = canvas.getContext('2d', { alpha: false });
+                    if (!ctx) return reject(new Error('Browser tidak mendukung Canvas untuk kompresi gambar.'));
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = () => reject(new Error('Gambar struk tidak dapat dibaca.'));
+                img.src = dataUrl;
+            });
+        }
+
+        function formatRupiah(number) {
+            return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(number || 0);
+        }
+
+        function formatNumberOnly(number) {
+            return new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(number || 0);
+        }
+
+        function formatDateIndo(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
+        }
+
+        function formatCardNumber(val) {
+            if (!val) return '';
+            const cleaned = val.toString().replace(/\D/g, '').slice(0, 16);
+            return cleaned.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+        }
+
+        function terbilangRupiah(num) {
+            const angka = ["", "Satu", "Dua", "Tiga", "Empat", "Lima", "Enam", "Tujuh", "Delapan", "Sembilan", "Sepuluh", "Sebelas"];
+            num = Math.floor(Math.abs(Number(num) || 0));
+            if (num === 0) return "Nol Rupiah";
+
+            function terbilang(n) {
+                if (n < 12) return angka[n];
+                if (n < 20) return terbilang(n - 10) + " Belas";
+                if (n < 100) return terbilang(Math.floor(n / 10)) + " Puluh " + (n % 10 !== 0 ? terbilang(n % 10) : "");
+                if (n < 200) return "Seratus " + (n - 100 !== 0 ? terbilang(n - 100) : "");
+                if (n < 1000) return terbilang(Math.floor(n / 100)) + " Ratus " + (n % 100 !== 0 ? terbilang(n % 100) : "");
+                if (n < 2000) return "Seribu " + (n - 1000 !== 0 ? terbilang(n - 1000) : "");
+                if (n < 1000000) return terbilang(Math.floor(n / 1000)) + " Ribu " + (n % 1000 !== 0 ? terbilang(n % 1000) : "");
+                if (n < 1000000000) return terbilang(Math.floor(n / 1000000)) + " Juta " + (n % 1000000 !== 0 ? terbilang(n % 1000000) : "");
+                if (n < 1000000000000) return terbilang(Math.floor(n / 1000000000)) + " Miliar " + (n % 1000000000 !== 0 ? terbilang(n % 1000000000) : "");
+                return terbilang(Math.floor(n / 1000000000000)) + " Triliun " + (n % 1000000000000 !== 0 ? terbilang(n % 1000000000000) : "");
+            }
+            return terbilang(num).replace(/\s+/g, ' ').trim() + " Rupiah";
+        }
+
+        function detectBankFromCardNumber(cardNum, merchant = '') {
+            const clean = (cardNum || '').replace(/\D/g, '');
+            const m = (merchant || '').toLowerCase();
+            
+            if (clean.startsWith('6032') || clean.startsWith('6087') || clean.startsWith('6031') || clean.startsWith('5899') || clean.startsWith('6035') || m.includes('mandiri') || m.includes('e-money') || m.includes('livin')) {
+                return { bank: 'Mandiri', color: 'from-blue-600 via-indigo-700 to-blue-900', label: 'Mandiri e-Money' };
+            }
+            if (clean.startsWith('6013') || clean.startsWith('6019') || clean.startsWith('6014') || clean.startsWith('6015') || m.includes('bca') || m.includes('flazz')) {
+                return { bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950', label: 'BCA Flazz' };
+            }
+            if (clean.startsWith('6018') || clean.startsWith('5379') || clean.startsWith('5221') || m.includes('bri') || m.includes('brizzi')) {
+                return { bank: 'BRI', color: 'from-cyan-600 via-blue-800 to-blue-950', label: 'BRI Brizzi' };
+            }
+            if (clean.startsWith('1515') || clean.startsWith('7546') || clean.startsWith('5401') || m.includes('bni') || m.includes('tapcash')) {
+                return { bank: 'BNI', color: 'from-amber-600 via-orange-700 to-slate-900', label: 'BNI TapCash' };
+            }
+            if (clean.startsWith('6030') || m.includes('jakcard') || m.includes('dki')) {
+                return { bank: 'Bank DKI', color: 'from-emerald-600 via-teal-700 to-slate-900', label: 'DKI JakCard' };
+            }
+
+            return { bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950', label: 'BCA Flazz' };
+        }
+
+        function getGoogleDriveDirectImageUrl(url) {
+            if (!url) return '';
+            const cleanUrl = String(url).trim();
+            if (cleanUrl.startsWith('data:image')) return cleanUrl;
+
+            let fileId = null;
+            const match1 = cleanUrl.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+            if (match1 && match1[1]) {
+                fileId = match1[1];
+            } else {
+                const match2 = cleanUrl.match(/id=([a-zA-Z0-9_-]+)/);
+                if (match2 && match2[1]) {
+                    fileId = match2[1];
+                } else if (/^[a-zA-Z0-9_-]{25,}$/.test(cleanUrl)) {
+                    fileId = cleanUrl;
+                }
+            }
+
+            if (fileId) {
+                return `https://drive.google.com/thumbnail?id=${fileId}&sz=w2500`;
+            }
+            return cleanUrl;
+        }
+
+        async function callGeminiOCR(base64DataUrl, userApiKey) {
+            let mimeType = "image/jpeg";
+            let base64Data = base64DataUrl;
+            const match = base64DataUrl.match(/^data:(image\/[a-zA-Z0-9.+]+);base64,(.+)$/);
+            if (match) {
+                mimeType = match[1];
+                base64Data = match[2];
+            }
+
+            const apiKey = (userApiKey || "").trim();
+            if (!apiKey) {
+                throw new Error("API Key Gemini belum diisi. Silakan masukkan API Key Gemini Anda.");
+            }
+
+            const systemPrompt = "Anda adalah sistem OCR multimodal khusus mengekstrak data dari invoice/struk e-Toll Indonesia (e-Money, BCA Flazz, Brizzi, Tapcash, Livin, Tokopedia, Indomaret, dll). Ekstrak data secara tepat.";
+            const userPrompt = "Analisis foto struk ini. Ekstrak:\n1. etollNumber: 16-digit nomor kartu e-Toll\n2. merchant: Nama driver atau tempat/aplikasi pembelian\n3. amount: Total nominal (angka murni tanpa titik/koma)\n4. invoiceNumber: Nomor resi / invoice / referensi\n5. date: Tanggal transaksi (YYYY-MM-DD)";
+
+            // Prioritaskan model stable yang ada di Google AI Studio
+            const modelNames = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-2.5-flash"];
+            let lastError = null;
+
+            for (const model of modelNames) {
+                try {
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                    const payload = {
+                        contents: [{ role: "user", parts: [{ text: userPrompt }, { inlineData: { mimeType, data: base64Data } }] }],
+                        systemInstruction: { parts: [{ text: systemPrompt }] },
+                        generationConfig: {
+                            responseMimeType: "application/json",
+                            responseSchema: {
+                                type: "OBJECT",
+                                properties: {
+                                    etollNumber: { type: "STRING" },
+                                    merchant: { type: "STRING" },
+                                    amount: { type: "NUMBER" },
+                                    invoiceNumber: { type: "STRING" },
+                                    date: { type: "STRING" }
+                                },
+                                required: ["etollNumber", "merchant", "amount", "invoiceNumber", "date"]
+                            }
+                        }
+                    };
+
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) {
+                        const errJson = await response.json().catch(() => ({}));
+                        throw new Error(errJson.error?.message || `HTTP ${response.status} pada model ${model}`);
+                    }
+
+                    const result = await response.json();
+                    const text = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+                    if (!text) {
+                        throw new Error("Respons AI kosong atau diblokir oleh filter keamanan.");
+                    }
+
+                    const cleanJsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const parsed = JSON.parse(cleanJsonStr);
+
+                    if (parsed.amount) {
+                        parsed.amount = parseFloat(String(parsed.amount).replace(/[^0-9.]/g, '')) || 0;
+                    }
+                    return parsed;
+                } catch (err) {
+                    console.warn(`Percobaan model ${model} gagal:`, err.message);
+                    lastError = err;
+                }
+            }
+
+            throw lastError || new Error("Gagal memproses OCR via Gemini API.");
+        }
+
+        const INITIAL_CARDS = [
+            { id: 'card-1', label: 'Saiful Pramono', nopol: 'AD 1214 XU', number: '6013 5001 9148 5664', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-2', label: 'Sanuova Brita Shina', nopol: 'AD 1016 XH', number: '6013 5001 8192 2353', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-3', label: 'Muhamad Haikal Zaki Fadli', nopol: 'AD 1095 XA', number: '6013 5001 8192 6016', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-4', label: 'Supriyanto', nopol: 'AD 1060 XA', number: '6013 5001 8476 7961', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-5', label: 'Latif Aliansyah', nopol: 'AD 1055 XA', number: '6013 5001 8671 8715', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-6', label: 'Arif Setiawan Wartoyo', nopol: 'AD 1066 XA', number: '6013 5001 8192 5927', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-7', label: 'Widya Amartha Permana Putra', nopol: 'AD 1127 XA', number: '6013 5001 8192 3500', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-8', label: 'Sumargianto', nopol: 'AD 1124 XA', number: '6013 5001 8192 6115', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-9', label: 'Sumpono', nopol: 'AD 1150 XA', number: '6013 5001 8192 5976', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-10', label: 'Budi Hartono', nopol: 'AD 1367 XA', number: '6013 5001 8192 5992', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-11', label: 'Supriyanto', nopol: 'AD 1236 XA', number: '6013 5022 0034 5475', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-12', label: 'Wachyu Sri Haryanto', nopol: 'AD 1015 XH', number: '6013 5022 0034 5434', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-13', label: 'Fuad Hasan', nopol: 'AD 1014 XH', number: '6013 5001 8192 6032', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-14', label: 'Sriyanto', nopol: 'AD 1126 XA', number: '6013 5001 9148 5656', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' },
+            { id: 'card-15', label: 'Tri Boko Pratikno', nopol: 'AD 1047 XA', number: '6013 5001 8192 5943', bank: 'BCA', color: 'from-sky-600 via-blue-700 to-indigo-950' }
+        ];
+
+        const OFFICIAL_DRIVER_MAP = {
+            '6013500191485664': { name: 'Saiful Pramono', nopol: 'AD 1214 XU' },
+            '6013500181922353': { name: 'Sanuova Brita Shina', nopol: 'AD 1016 XH' },
+            '6013500181926016': { name: 'Muhamad Haikal Zaki Fadli', nopol: 'AD 1095 XA' },
+            '6013500184767961': { name: 'Supriyanto', nopol: 'AD 1060 XA' },
+            '6013500186718715': { name: 'Latif Aliansyah', nopol: 'AD 1055 XA' },
+            '6013500181925927': { name: 'Arif Setiawan Wartoyo', nopol: 'AD 1066 XA' },
+            '6013500181923500': { name: 'Widya Amartha Permana Putra', nopol: 'AD 1127 XA' },
+            '6013500181926115': { name: 'Sumargianto', nopol: 'AD 1124 XA' },
+            '6013500181925976': { name: 'Sumpono', nopol: 'AD 1150 XA' },
+            '6013500181925992': { name: 'Budi Hartono', nopol: 'AD 1367 XA' },
+            '6013502200345475': { name: 'Supriyanto', nopol: 'AD 1236 XA' },
+            '6013502200345434': { name: 'Wachyu Sri Haryanto', nopol: 'AD 1015 XH' },
+            '6013500181926032': { name: 'Fuad Hasan', nopol: 'AD 1014 XH' },
+            '6013500191485656': { name: 'Sriyanto', nopol: 'AD 1126 XA' },
+            '6013500181925943': { name: 'Tri Boko Pratikno', nopol: 'AD 1047 XA' }
+        };
+
+        const getLiveCurrentYearMonth = () => {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            return `${year}-${month}`;
+        };
+
+        const currentYearMonth = getLiveCurrentYearMonth();
+
+        const INITIAL_DUMMY_TXS = [
+            { id: 'tx_1', etollNumber: '6013 5001 9148 5664', merchant: 'Saiful Pramono', amount: 3000000, invoiceNumber: 'BK-09/2026/01', date: '2026-09-02', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_2', etollNumber: '6013 5001 8192 2353', merchant: 'Sanuova Brita Shina', amount: 2500000, invoiceNumber: 'BK-09/2026/02', date: '2026-09-04', source: 'Telegram Bot', gdriveUrl: '' },
+            { id: 'tx_3', etollNumber: '6013 5001 8192 6016', merchant: 'Muhamad Haikal Zaki Fadli', amount: 2500000, invoiceNumber: 'BK-09/2026/03', date: '2026-09-06', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_4', etollNumber: '6013 5001 8476 7961', merchant: 'Supriyanto', amount: 1500000, invoiceNumber: 'BK-09/2026/04', date: '2026-09-09', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_5', etollNumber: '6013 5001 8671 8715', merchant: 'Latif Aliansyah', amount: 1500000, invoiceNumber: 'BK-09/2026/05', date: '2026-09-12', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_6', etollNumber: '6013 5001 8192 5927', merchant: 'Arif Setiawan Wartoyo', amount: 1500000, invoiceNumber: 'BK-09/2026/06', date: '2026-09-15', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_7', etollNumber: '6013 5001 8192 3500', merchant: 'Widya Amartha Permana Putra', amount: 1200000, invoiceNumber: 'BK-09/2026/07', date: '2026-09-18', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_8', etollNumber: '6013 5001 8192 6115', merchant: 'Sumargianto', amount: 1000000, invoiceNumber: 'BK-09/2026/08', date: '2026-09-20', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_9', etollNumber: '6013 5001 8192 5976', merchant: 'Sumpono', amount: 1000000, invoiceNumber: 'BK-09/2026/09', date: '2026-09-22', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_10', etollNumber: '6013 5001 8192 5992', merchant: 'Budi Hartono', amount: 1000000, invoiceNumber: 'BK-09/2026/10', date: '2026-09-24', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_11', etollNumber: '6013 5022 0034 5475', merchant: 'Supriyanto', amount: 1000000, invoiceNumber: 'BK-09/2026/11', date: '2026-09-25', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_12', etollNumber: '6013 5022 0034 5434', merchant: 'Wachyu Sri Haryanto', amount: 800000, invoiceNumber: 'BK-09/2026/12', date: '2026-09-27', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_13', etollNumber: '6013 5001 8192 6032', merchant: 'Fuad Hasan', amount: 500000, invoiceNumber: 'BK-09/2026/13', date: '2026-09-28', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_14', etollNumber: '6013 5001 9148 5656', merchant: 'Sriyanto', amount: 500000, invoiceNumber: 'BK-09/2026/14', date: '2026-09-29', source: 'Web Scan', gdriveUrl: '' },
+            { id: 'tx_15', etollNumber: '6013 5001 8192 5943', merchant: 'Tri Boko Pratikno', amount: 500000, invoiceNumber: 'BK-09/2026/15', date: '2026-09-30', source: 'Web Scan', gdriveUrl: '' }
+        ];
+    </script>
+
+    <script type="text/babel">
+        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
+            const [securityModal, setSecurityModal] = React.useState(null);
+            const [passwordInput, setPasswordInput] = React.useState('');
+            const [passError, setPassError] = React.useState('');
+            const [showNewCardInput, setShowNewCardInput] = React.useState(false);
+            const [newCardData, setNewCardData] = React.useState({ label: '', nopol: '', number: '', bank: 'BCA' });
+            const [editingCard, setEditingCard] = React.useState(null);
+            const [updateLinkedTxs, setUpdateLinkedTxs] = React.useState(true);
+            const [usageSort, setUsageSort] = React.useState('active');
+            const [migrationBusy, setMigrationBusy] = React.useState(false);
+            const [migrationReport, setMigrationReport] = React.useState(null);
+            const [migrationProgress, setMigrationProgress] = React.useState('');
+            const [migrationPreview, setMigrationPreview] = React.useState(null);
+            const [masterDrivers, setMasterDrivers] = React.useState([]);
+            const [masterVehicles, setMasterVehicles] = React.useState([]);
+            const [newDriverName, setNewDriverName] = React.useState('');
+            const [newVehiclePlate, setNewVehiclePlate] = React.useState('');
+            const [masterListsLoaded, setMasterListsLoaded] = React.useState(false);
+
+            React.useEffect(() => {
+                const unsubscribe = window.rekaptollAuth.onIdTokenChanged(async user => {
+                    setAuthUser(user || null);
+                    if (!user) {
+                        setAuthClaims({});
+                        setIsAdminMode(false);
+                        return;
+                    }
+                    try {
+                        const result = await user.getIdTokenResult(true);
+                        const claims = result.claims || {};
+                        setAuthClaims(claims);
+                        setIsAdminMode(claims.admin === true);
+                    } catch (err) {
+                        console.error('[Auth] Gagal membaca custom claims:', err);
+                        setAuthClaims({});
+                        setIsAdminMode(false);
+                    }
+                });
+                return unsubscribe;
+            }, []);
+
+            const openAdminLogin = async () => {
+                if (authUser) {
+                    await window.rekaptollAuth.signOut();
+                    setIsAdminMode(false);
+                    if (['monthly_recap', 'cloud_config', 'master_data'].includes(activeTab)) setActiveTab('dashboard');
+                    showToastNotification('Keluar dari akun RekapToll.', 'info');
+                    return;
+                }
+                setAdminEmailInput('');
+                setAdminPasswordInput('');
+                setAdminPassError('');
+                setShowAdminLogin(true);
+            };
+
+            const confirmAdminLogin = async () => {
+                try {
+                    if (!adminEmailInput.trim() || !adminPasswordInput) throw new Error('Email dan password wajib diisi.');
+                    const credential = await window.rekaptollAuth.signInWithEmailAndPassword(adminEmailInput.trim(), adminPasswordInput);
+                    const tokenResult = await credential.user.getIdTokenResult(true);
+                    const claims = tokenResult.claims || {};
+                    setAuthClaims(claims);
+                    setAuthUser(credential.user);
+                    if (claims.admin !== true && claims.reader !== true) {
+                        await window.rekaptollAuth.signOut();
+                        throw new Error('Akun belum memiliki hak akses admin atau reader.');
+                    }
+                    setIsAdminMode(claims.admin === true);
+                    setShowAdminLogin(false);
+                    setAdminPasswordInput('');
+                    setAdminEmailInput('');
+                    setAdminPassError('');
+                    showToastNotification(claims.admin === true ? 'Login admin berhasil.' : 'Login reader berhasil (akses baca saja).', 'success');
+                } catch (err) {
+                    setAdminPassError(err.message || 'Login Firebase gagal.');
+                }
+            };
+
+            const saveAdminPasswordChange = async () => {
+                showToastNotification('Penggantian password dilakukan melalui Firebase Authentication, bukan dari hash di database.', 'info');
+                setShowChangeAdminPassword(false);
+            };
+
+            const handleAdminTab = (tab) => {
+                if (!isAdminMode) {
+                    openAdminLogin();
+                    return;
+                }
+                setActiveTab(tab);
+            };
+
+            const handleUpdateDeposit = async (monthKey, amount, depositDate = getLocalDateString(), proofData = '', proofName = '') => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengubah Deposit Kasbon.', 'info'); return false; }
+                const targetMonth = (!monthKey || monthKey === 'ALL') ? currentYearMonth : monthKey;
+                const num = Math.max(0, Number(amount) || 0);
+                if (!/^\d{4}-\d{2}$/.test(targetMonth) || !/^\d{4}-\d{2}-\d{2}$/.test(depositDate) || depositDate.slice(0,7) !== targetMonth) {
+                    showToastNotification('Tanggal pengisian harus berada pada bulan/periode yang dipilih.', 'error'); return false;
+                }
+                if (num <= 0) { showToastNotification('Masukkan nominal pengisian lebih dari Rp0.', 'error'); return false; }
+                showToastNotification('Data deposit hanya dimasukkan melalui Bot Telegram. Dashboard ini baca-saja.', 'info');
+                return false;
+                const previousEntries = monthlyDepositHistory[targetMonth] || [];
+                // Kompatibilitas data lama: nominal bulanan lama dipertahankan sebagai saldo awal
+                // hanya saat belum ada riwayat setoran untuk periode tersebut.
+                const legacyOpening = previousEntries.length ? 0 : Math.max(0, Number(monthlyDeposits[targetMonth]) || 0);
+                const openingEntry = legacyOpening > 0 ? [{ id: `opening_${targetMonth}`, date: `${targetMonth}-01`, amount: legacyOpening, proofData: '', proofName: '', note: 'Saldo awal dari data sebelumnya', createdAt: new Date().toISOString() }] : [];
+                const entry = { id: `dep_${Date.now()}_${Math.random().toString(36).slice(2,8)}`, date: depositDate, amount: num, proofData: proofData || '', proofName: proofName || '', createdAt: new Date().toISOString() };
+                const nextEntries = [...openingEntry, ...previousEntries, entry];
+                const nextHistory = { ...monthlyDepositHistory, [targetMonth]: nextEntries };
+                const updated = { ...monthlyDeposits, [targetMonth]: nextEntries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0) };
+                setMonthlyDeposits(updated);
+                setMonthlyDepositHistory(nextHistory);
+                safeStorageSet('etoll_monthly_deposits', JSON.stringify(updated));
+                safeStorageSet('etoll_monthly_deposit_history', JSON.stringify(nextHistory));
+                const results = await Promise.all([pushToCloud('monthlyDeposits', updated), pushToCloud(`monthlyDepositHistory/${targetMonth}`, nextHistory[targetMonth])]);
+                if (results.some(x => x === false)) {
+                    showToastNotification(`Deposit ${targetMonth} tersimpan lokal, tetapi sinkronisasi Firebase gagal.`, 'error');
+                    return false;
+                }
+                showToastNotification(`Pengisian kasbon ${formatDateIndo(depositDate)} sebesar ${formatRupiah(num)} berhasil disimpan.`);
+                return true;
+            };
+
+            const openDepositModalForMonth = (m) => {
+                const target = (!m || m === 'ALL') ? currentYearMonth : m;
+                setDepositModalMonth(target);
+                setEditingDepositId(null);
+                setDepositModalValue('');
+                setDepositModalDate(getLocalDateString().slice(0,7) === target ? getLocalDateString() : `${target}-01`);
+                setDepositProofData('');
+                setDepositProofName('');
+                setShowDepositModal(true);
+            };
+
+            const persistDepositHistory = async (month, entries, successMessage) => {
+                showToastNotification('Koreksi riwayat deposit hanya dapat dilakukan melalui Bot Telegram. Dashboard ini baca-saja.', 'info');
+                return false;
+            };
+
+            const startEditDeposit = (month, item) => {
+                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengedit riwayat deposit.', 'info'); return; }
+                if (String(item.id || '').startsWith('opening_')) {
+                    showToastNotification('Saldo awal bawaan tidak dapat diedit sebagai setoran. Tambahkan setoran baru untuk koreksi.', 'info');
+                    return;
+                }
+                setDepositModalMonth(month);
+                setDepositModalValue(String(item.amount || 0));
+                setDepositModalDate(item.date || `${month}-01`);
+                setDepositProofData(item.proofData || '');
+                setDepositProofName(item.proofName || '');
+                setEditingDepositId(item.id);
+            };
+
+            const saveDepositEdit = async () => {
+                showToastNotification('Edit deposit melalui dashboard dinonaktifkan. Gunakan Bot Telegram.', 'info');
+                return false;
+            };
+
+            const deleteDepositEntry = async (month, item) => {
+                showToastNotification('Hapus deposit melalui dashboard dinonaktifkan. Gunakan Bot Telegram/admin backend.', 'info');
+                return false;
+            };
+
+            const pushToCloud = async (path, data) => {
+                if (!firebaseProjectId) {
+                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
+                    return false;
+                }
+                try {
+                    const targetPid = firebaseProjectId.trim();
+                    // Jangan membatalkan PUT dengan AbortController: pada beberapa koneksi
+                    // browser lokal, request dibatalkan sebelum Firebase mengembalikan respons.
+                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`;
+                    console.info('[Firebase] Menyimpan', path);
+                    const response = await fetch(url, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data),
+                        cache: 'no-store'
+                    });
+                    if (!response.ok) {
+                        let detail = '';
+                        try { detail = await response.text(); } catch (_) {}
+                        throw new Error(`Firebase HTTP ${response.status}${detail ? ': ' + detail.slice(0,180) : ''}`);
+                    }
+                    setSyncStatus({ state: 'success', msg: 'Tersimpan di Firebase' });
+                    console.info('[Firebase] Berhasil menyimpan', path);
+                    return true;
+                } catch (e) {
+                    console.error('Cloud push failed for', path, e);
+                    const message = e?.name === 'AbortError' ? 'Permintaan dibatalkan browser atau koneksi' : (e.message || 'koneksi bermasalah');
+                    setSyncStatus({ state: 'error', msg: `Gagal menyimpan ${path}: ${message}` });
+                    showToastNotification(`Gagal menyimpan ${path}: ${message}`, 'error');
+                    return false;
+                }
+            };
+
+            // Perbaikan Bug 2: Jangan sinkronkan kartu yang sudah sengaja dihapus
+            React.useEffect(() => {
+                if (!transactions || transactions.length === 0) return;
+                let addedAny = false;
+                const existingCleanNums = new Set(cards.map(c => (c.number || '').replace(/\D/g, '')));
+                const deletedSet = new Set(deletedCardNumbers);
+                const newCardsToAdd = [];
+
+                transactions.forEach(tx => {
+                    const cleanNum = (tx.etollNumber || '').replace(/\D/g, '');
+                    if (cleanNum && cleanNum.length >= 12 && !existingCleanNums.has(cleanNum) && !deletedSet.has(cleanNum)) {
+                        existingCleanNums.add(cleanNum);
+                        const officialData = OFFICIAL_DRIVER_MAP[cleanNum];
+                        const matchedPreset = INITIAL_CARDS.find(ic => (ic.number || '').replace(/\D/g, '') === cleanNum);
+                        const detected = detectBankFromCardNumber(tx.etollNumber, tx.merchant);
+
+                        let driverName = officialData ? officialData.name : (matchedPreset ? matchedPreset.label : null);
+                        let nopol = officialData ? officialData.nopol : (matchedPreset ? matchedPreset.nopol : null);
+
+                        if (!driverName) {
+                            driverName = (tx.merchant && !['bank bri', 'brimo', 'mandiri', 'livin'].some(b => tx.merchant.toLowerCase().includes(b))) 
+                                ? tx.merchant 
+                                : `Driver Baru (${cleanNum.slice(-4)})`;
+                        }
+                        if (!nopol) {
+                            nopol = 'AD 1214 XU';
+                        }
+
+                        newCardsToAdd.push({
+                            id: 'card-' + Date.now() + '-' + Math.random().toString(36).substring(2, 6),
+                            label: driverName,
+                            nopol: nopol,
+                            number: formatCardNumber(tx.etollNumber),
+                            bank: detected.bank,
+                            color: detected.color
+                        });
+                        addedAny = true;
+                    }
+                });
+
+                if (addedAny && newCardsToAdd.length > 0) {
+                    // Tulis hanya bila ada kartu baru hasil deteksi transaksi; tidak ada penulisan ulang berkala.
+                    setCards(prev => {
+                        const updated = [...prev, ...newCardsToAdd];
+                        safeStorageSet('etoll_cards', JSON.stringify(updated));
+                        pushToCloud('cards', updated);
+                        return updated;
+                    });
+                }
+            }, [transactions, deletedCardNumbers, cards]);
+
+            const fetchCloudData = React.useCallback(async (pidOverride = null, monthOverride = null) => {
+                const targetPid = String(pidOverride !== null ? pidOverride : firebaseProjectId).trim();
+                if (!targetPid) {
+                    setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — Project ID belum tersedia' });
+                    return false;
+                }
+
+                const baseUrl = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app`;
+                const now = new Date();
+                const currentMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+                const requestedMonth = monthOverride || selectedMonth || currentMonth;
+                const readJson = async (path, query = '') => {
+                    const response = await fetch(`${baseUrl}/${path}.json${query}`, {
+                        cache: 'no-store',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) {
+                        let detail = '';
+                        try { detail = await response.text(); } catch (_) {}
+                        throw new Error(`${path}: HTTP ${response.status}${detail ? ' — ' + detail.slice(0,160) : ''}`);
+                    }
+                    return await response.json();
+                };
+
+                console.info('[Firebase] Memuat data resmi:', requestedMonth);
+                setSyncStatus({ state: 'connecting', msg: `Menghubungkan ke Firebase ${targetPid}…` });
+
+                try {
+                    // Pembacaan transaksi adalah pemeriksaan inti. Data tambahan dibaca terpisah
+                    // agar satu node opsional yang kosong/tidak tersedia tidak mematikan seluruh dashboard.
+                    let monthKeys = [];
+                    if (requestedMonth === 'ALL') {
+                        try {
+                            const keys = await readJson('transactionsByMonth', '?shallow=true');
+                            monthKeys = Object.keys(keys || {}).filter(k => /^\d{4}-\d{2}$/.test(k)).sort();
+                        } catch (e) {
+                            monthKeys = (cloudMonthKeys || []).filter(k => /^\d{4}-\d{2}$/.test(k));
+                            if (!monthKeys.length) throw e;
+                        }
+                    } else {
+                        monthKeys = [requestedMonth];
+                    }
+
+                    const txSnapshots = await Promise.all(monthKeys.map(async month => ({
+                        month,
+                        data: await readJson(`transactionsByMonth/${month}`)
+                    })));
+                    const byId = new Map();
+                    txSnapshots.forEach(({month, data}) => {
+                        const list = data && typeof data === 'object'
+                            ? (Array.isArray(data)
+                                ? data.filter(Boolean).map((tx, i) => ({ ...tx, id: String(tx.id ?? i) }))
+                                : Object.entries(data).filter(([, tx]) => tx && typeof tx === 'object')
+                                    .map(([key, tx]) => ({ ...tx, id: String(tx.id ?? key) })))
+                            : [];
+                        list.forEach(tx => {
+                            if (String(tx.date || '').slice(0,7) === month) byId.set(String(tx.id), tx);
+                        });
+                    });
+
+                    const monthly = [...byId.values()].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+                    setTransactions(prev => {
+                        if (requestedMonth === 'ALL') return monthly;
+                        const outsideMonth = prev.filter(tx => String(tx.date || '').slice(0,7) !== requestedMonth);
+                        const unique = new Map([...outsideMonth, ...monthly].map(tx => [String(tx.id), tx]));
+                        return [...unique.values()].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+                    });
+
+                    // Node pendukung tidak boleh menggagalkan tampilan transaksi utama.
+                    const optionalNodes = [
+                        ['spjProfile', 'spjProfile'],
+                        ['cards', 'cards'],
+                        ['monthlyDeposits', 'monthlyDeposits']
+                    ];
+                    const optionalResults = await Promise.allSettled(optionalNodes.map(([path]) => readJson(path)));
+                    optionalResults.forEach((result, index) => {
+                        const path = optionalNodes[index][0];
+                        if (result.status !== 'fulfilled') {
+                            console.warn('[Firebase] Node pendukung gagal dibaca:', path, result.reason);
+                            return;
+                        }
+                        const data = result.value;
+                        if (path === 'spjProfile' && data) setSpjProfile(prev => ({ ...prev, ...data }));
+                        if (path === 'cards') {
+                            const cloudCards = Array.isArray(data) ? data.filter(Boolean) :
+                                (data && typeof data === 'object' ? Object.entries(data)
+                                    .filter(([, value]) => value && typeof value === 'object')
+                                    .map(([key, value]) => ({ id: key, ...value })) : []);
+                            setCards(cloudCards);
+                        }
+                        if (path === 'monthlyDeposits') setMonthlyDeposits(data && typeof data === 'object' ? data : {});
+                    });
+
+                    const historyMonths = requestedMonth === 'ALL' ? monthKeys : [requestedMonth];
+                    const historyResults = await Promise.allSettled(historyMonths.map(month => readJson(`monthlyDepositHistory/${month}`)));
+                    historyResults.forEach((result, index) => {
+                        if (result.status !== 'fulfilled') {
+                            console.warn('[Firebase] Riwayat deposit tidak terbaca:', historyMonths[index], result.reason);
+                            return;
+                        }
+                        const data = result.value;
+                        const history = Array.isArray(data) ? data.filter(Boolean) :
+                            (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
+                        setMonthlyDepositHistory(prev => ({ ...prev, [historyMonths[index]]: history }));
+                    });
+
+                    setSyncStatus({
+                        state: 'success',
+                        msg: `Database TERHUBUNG — ${monthly.length} transaksi dibaca dari Firebase (${requestedMonth}).`
+                    });
+                    console.info('[Firebase] Berhasil membaca transaksi:', targetPid, monthly.length);
+                    return true;
+                } catch (e) {
+                    const message = e?.message || 'Gagal membaca Firebase';
+                    setSyncStatus({ state: 'error', msg: `Database TIDAK TERHUBUNG / baca gagal: ${message}` });
+                    console.error('[Firebase] Pembacaan transaksi gagal:', message);
+                    return false;
+                }
+            }, [firebaseProjectId, selectedMonth, cloudMonthKeys]);
+            // Temukan daftar bulan yang benar-benar tersedia di Firebase tanpa mengunduh isi transaksi.
+            // shallow=true hanya mengambil nama node bulan, bukan seluruh record.
+            React.useEffect(() => {
+                let cancelled = false;
+                const discoverCloudMonths = async () => {
+                    try {
+                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/transactionsByMonth.json?shallow=true`;
+                        const response = await fetch(url, { cache: 'no-store', headers: { 'Accept': 'application/json' } });
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        const data = await response.json();
+                        const months = data && typeof data === 'object'
+                            ? Object.keys(data).filter(key => /^\d{4}-\d{2}$/.test(key))
+                            : [];
+                        if (!cancelled) setCloudMonthKeys(months);
+                        console.info('[Firebase] Bulan transaksi tersedia:', months);
+                    } catch (error) {
+                        console.warn('[Firebase] Tidak dapat mengambil daftar bulan:', error.message);
+                    }
+                };
+                discoverCloudMonths();
+                return () => { cancelled = true; };
+            }, [firebaseProjectId]);
+
+            // Hemat kuota: ambil data saat aplikasi dibuka atau saat bulan/proyek berubah.
+            // Tidak memakai polling maupun EventSource permanen. Perubahan dari perangkat lain
+            // akan terlihat setelah tombol Segarkan atau saat aplikasi dibuka kembali.
+            React.useEffect(() => {
+                const targetPid = (firebaseProjectId || '').trim();
+                if (!targetPid) return;
+                fetchCloudData(null, selectedMonth);
+            }, [firebaseProjectId, selectedMonth, fetchCloudData]);
+
+            React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
+            React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
+            // Transaksi operasional tidak dicache ke localStorage; Firebase adalah sumber tunggal.
+            React.useEffect(() => { safeStorageSet('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
+            React.useEffect(() => { safeStorageSet('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
+            React.useEffect(() => { safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl); }, [gdriveWebhookUrl]);
+            React.useEffect(() => { safeStorageSet('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
+            // Saldo dan riwayat deposit tidak dicache sebagai data resmi.
+
+            const showToastNotification = (msg, type = 'success') => {
+                setToast({ msg, type });
+                setTimeout(() => setToast(null), 4000);
+            };
+
+            const handleUpdateSpjProfile = (newProfile) => {
+                setSpjProfile(newProfile);
+                pushToCloud('spjProfile', newProfile);
+                showToastNotification('Profil SPJ & Pejabat berhasil diperbarui & disimpan ke Cloud!');
+            };
+
+            const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
+                if (!invoiceNum || !invoiceNum.trim()) return false;
+                const clean = invoiceNum.trim().toUpperCase();
+                // Pemeriksaan UI dibatasi ke bulan kalender berjalan; worker tetap menjadi validasi utama.
+                const now = new Date();
+                const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                return transactions.some(t => t.id !== excludeId && String(t.date || '').slice(0, 7) === monthKey && t.invoiceNumber && String(t.invoiceNumber).trim().toUpperCase() === clean);
+            };
+
+            const handleAddCard = (newCardData) => {
+                const formattedNum = formatCardNumber(newCardData.number);
+                if (!formattedNum) return null;
+                const cleanNum = formattedNum.replace(/\D/g, '');
+                
+                setDeletedCardNumbers(prev => prev.filter(n => n !== cleanNum));
+
+                const existing = cards.find(c => (c.number || '').replace(/\D/g, '') === cleanNum);
+                if (existing) {
+                    showToastNotification(`Kartu (${formattedNum}) sudah terdaftar sebelumnya.`, 'info');
+                    return existing;
+                }
+
+                const detected = detectBankFromCardNumber(formattedNum, newCardData.merchant || newCardData.label);
+                const newCard = {
+                    id: 'card-' + Date.now(),
+                    label: newCardData.label || `${detected.label} (${cleanNum.slice(-4) || 'e-Toll'})`,
+                    nopol: (newCardData.nopol || 'AD 1214 XU').toUpperCase(),
+                    number: formattedNum,
+                    bank: newCardData.bank || detected.bank,
+                    color: detected.color
+                };
+                const updated = [...cards, newCard];
+                setCards(updated);
+                pushToCloud('cards', updated);
+                showToastNotification(`Kartu baru (${formattedNum}) berhasil ditambahkan.`);
+                return newCard;
+            };
+
+            const handleSaveTransaction = async (txData) => {
+                showToastNotification('Koreksi transaksi melalui dashboard dinonaktifkan. Input operasional dilakukan melalui Bot Telegram.', 'info');
+                return false;
+            };
+
+            const handleDeleteTransaction = async (id) => {
+                showToastNotification('Hapus transaksi melalui dashboard dinonaktifkan. Gunakan prosedur admin/backend yang terotorisasi.', 'info');
+                return false;
+            };
+
+            const handleExportExcel = () => {
+                const currentDeposit = depositAvailable;
+                const totalSpent = monthlyTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+                const balance = currentDeposit - totalSpent;
+
+                const cardSummaryMap = {};
+                monthlyTransactions.forEach(t => {
+                    const formattedNum = formatCardNumber(t.etollNumber);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    if (cleanNum) {
+                        if (!cardSummaryMap[cleanNum]) {
+                            const registeredCard = cards.find(c => formatCardNumber(c.number).replace(/\D/g, '') === cleanNum);
+                            const detected = detectBankFromCardNumber(formattedNum, t.merchant);
+                            cardSummaryMap[cleanNum] = {
+                                label: registeredCard ? registeredCard.label : (t.merchant || detected.label),
+                                bank: registeredCard ? registeredCard.bank : detected.bank,
+                                number: formattedNum,
+                                count: 0,
+                                total: 0
+                            };
+                        }
+                        cardSummaryMap[cleanNum].count += 1;
+                        cardSummaryMap[cleanNum].total += Number(t.amount || 0);
+                    }
+                });
+                const cardSummaryList = Object.values(cardSummaryMap).sort((a, b) => b.total - a.total);
+
+                const wb = XLSX.utils.book_new();
+                
+                const data = [
+                    ["SURAT PERTANGGUNGJAWABAN (SPJ) BIAYA OPERASIONAL E-TOLL"],
+                    [`PERIODE: ${selectedMonth === 'ALL' ? 'Semua Periode' : selectedMonth}`],
+                    [`Unit / Institusi`, spjProfile.companyName || 'UNIVERSITAS SEBELAS MARET', "", `Divisi`, spjProfile.division || 'Kantor Pusat'],
+                    [`Penanggung Jawab`, spjProfile.applicantName || '', "", `MAK`, spjProfile.mak || ''],
+                    [""],
+                    ["RINGKASAN DEPOSIT UANG MUKA & REALISASI"],
+                    ["Deposit Uang Muka (Kasbon)", currentDeposit],
+                    ["Total Realisasi e-Toll", totalSpent],
+                    [balance >= 0 ? "Sisa Uang Muka" : "Kurang Bayar (Reimbursement)", Math.abs(balance)],
+                    ["Terbilang Realisasi", terbilangRupiah(totalSpent)],
+                    [""],
+                    ["REKAPITULASI RINCIAN PENGGUNAAN PER KARTU E-TOLL"],
+                    ["No", "Nama / Label Driver", "Bank", "Nomor Kartu E-Toll", "Jumlah Transaksi", "Total Nominal (Rp)"]
+                ];
+
+                cardSummaryList.forEach((c, idx) => {
+                    data.push([
+                        idx + 1,
+                        c.label,
+                        c.bank,
+                        c.number,
+                        c.count,
+                        c.total
+                    ]);
+                });
+
+                data.push(["", "", "", "TOTAL REALISASI:", `${monthlyTransactions.length} Transaksi`, totalSpent]);
+
+                const ws = XLSX.utils.aoa_to_sheet(data);
+                ws['!cols'] = [{ wch: 6 }, { wch: 28 }, { wch: 18 }, { wch: 24 }, { wch: 18 }, { wch: 20 }];
+
+                XLSX.utils.book_append_sheet(wb, ws, "Rekap_SPJ_eToll");
+                XLSX.writeFile(wb, `Rekap_SPJ_eToll_${selectedMonth}.xlsx`);
+                showToastNotification("Berkas Excel Rekap (.xlsx) berhasil diunduh!");
+            };
+
+            const handleSaveCloudSettings = async () => {
+                // Project ID sudah tertanam; panel ini hanya menyimpan layanan tambahan.
+                safeStorageSet('etoll_gemini_key', geminiApiKey);
+                safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl);
+
+                showToastNotification("Menguji koneksi Realtime Database...");
+                await fetchCloudData(FIREBASE_PROJECT_ID);
+            };
+
+            const availableMonths = React.useMemo(() => {
+                const setM = new Set();
+                setM.add(currentYearMonth);
+                setM.add('2026-08');
+                setM.add('2026-09');
+                transactions.forEach(t => {
+                    if (t.date && t.date.length >= 7) setM.add(t.date.substring(0, 7));
+                });
+                Object.keys(monthlyDeposits || {}).forEach(m => setM.add(m));
+                Object.keys(monthlyDepositHistory || {}).forEach(m => setM.add(m));
+                cloudMonthKeys.forEach(m => setM.add(m));
+                return Array.from(setM).sort().reverse();
+            }, [transactions, monthlyDeposits, monthlyDepositHistory, cloudMonthKeys]);
+
+            // Perbaikan Bug 5: Pisahkan transaksi per bulan (untuk Dashboard & SPJ) dari pencarian spesifik tabel
+            const monthlyTransactions = React.useMemo(() => {
+                return transactions.filter(t => selectedMonth === 'ALL' || (t.date && t.date.startsWith(selectedMonth)));
+            }, [transactions, selectedMonth]);
+
+            const filteredTransactions = React.useMemo(() => {
+                let result = monthlyTransactions.filter(t => {
+                    const cleanCardFilter = selectedCardFilter !== 'ALL' ? selectedCardFilter.replace(/\D/g, '') : 'ALL';
+                    const cleanTxCard = (t.etollNumber || '').replace(/\D/g, '');
+                    const matchesCard = selectedCardFilter === 'ALL' || cleanTxCard === cleanCardFilter;
+                    const matchesSearch = !searchQuery || 
+                        (t.merchant && t.merchant.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                        (t.invoiceNumber && t.invoiceNumber.toLowerCase().includes(searchQuery.toLowerCase())) ||
+                        (t.etollNumber && t.etollNumber.toLowerCase().includes(searchQuery.toLowerCase()));
+                    return matchesCard && matchesSearch;
+                });
+
+                if (sortConfig.key) {
+                    result.sort((a, b) => {
+                        let aVal = a[sortConfig.key] || '';
+                        let bVal = b[sortConfig.key] || '';
+                        if (sortConfig.key === 'amount') {
+                            aVal = Number(aVal || 0);
+                            bVal = Number(bVal || 0);
+                        }
+                        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                        return 0;
+                    });
+                }
+                return result;
+            }, [monthlyTransactions, selectedCardFilter, searchQuery, sortConfig]);
+
+            const handleSort = (key) => {
+                setSortConfig(prev => ({
+                    key,
+                    direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+                }));
+            };
+
+            const monthTotalSpent = React.useMemo(() => {
+                return monthlyTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+            }, [monthlyTransactions]);
+
+            const tableStats = React.useMemo(() => {
+                const count = filteredTransactions.length;
+                const total = filteredTransactions.reduce((s, t) => s + Number(t.amount || 0), 0);
+                const avg = count > 0 ? total / count : 0;
+                const max = count > 0 ? Math.max(...filteredTransactions.map(t => Number(t.amount || 0))) : 0;
+                return { count, total, avg, max };
+            }, [filteredTransactions]);
+
+            const cardBreakdown = React.useMemo(() => {
+                const cardMap = {};
+
+                cards.forEach(c => {
+                    const formattedNum = formatCardNumber(c.number);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    cardMap[cleanNum] = {
+                        id: c.id,
+                        label: c.label,
+                        nopol: c.nopol,
+                        bank: c.bank,
+                        number: formattedNum,
+                        total: 0,
+                        count: 0
+                    };
+                });
+
+                monthlyTransactions.forEach(t => {
+                    const formattedNum = formatCardNumber(t.etollNumber);
+                    const cleanNum = formattedNum.replace(/\D/g, '');
+                    if (cleanNum) {
+                        if (!cardMap[cleanNum]) {
+                            const detected = detectBankFromCardNumber(formattedNum, t.merchant);
+                            cardMap[cleanNum] = {
+                                id: 'unregistered-' + cleanNum,
+                                label: `${t.merchant || detected.label}`,
+                                nopol: 'AD 1214 XU',
+                                bank: detected.bank,
+                                number: formattedNum,
+                                total: 0,
+                                count: 0
+                            };
+                        }
+                        cardMap[cleanNum].total += Number(t.amount || 0);
+                        cardMap[cleanNum].count += 1;
+                    }
+                });
+
+                const list = Object.values(cardMap).filter(item => item.total > 0);
+                list.sort((a, b) => b.total - a.total);
+                return list;
+            }, [cards, monthlyTransactions]);
+
+            // List driver SPJ yang diurutkan sesuai pilihan kriteria
+            const sortedSpjDriverList = React.useMemo(() => {
+                const list = [...cardBreakdown];
+                list.sort((a, b) => {
+                    if (spjSortBy === 'total-desc') return b.total - a.total;
+                    if (spjSortBy === 'total-asc') return a.total - b.total;
+                    if (spjSortBy === 'name-asc') return (a.label || '').localeCompare(b.label || '');
+                    if (spjSortBy === 'nopol-asc') return (a.nopol || '').localeCompare(b.nopol || '');
+                    if (spjSortBy === 'card-asc') return (a.number || '').localeCompare(b.number || '');
+                    return 0;
+                });
+                return list;
+            }, [cardBreakdown, spjSortBy]);
+
+            const depositLedgerMonths = Array.from(new Set([
+                ...Object.keys(monthlyDeposits || {}),
+                ...Object.keys(monthlyDepositHistory || {}),
+                ...(transactions || []).map(t => String(t.date || '').slice(0,7)).filter(m => /^\d{4}-\d{2}$/.test(m))
+            ])).filter(m => /^\d{4}-\d{2}$/.test(m)).sort();
+            let carriedDepositBalance = 0;
+            depositLedgerMonths.filter(m => m < selectedMonth).forEach(m => {
+                const entries = monthlyDepositHistory[m] || [];
+                const depositsInMonth = entries.length
+                    ? entries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+                    : (Number(monthlyDeposits[m]) || 0);
+                const spentInMonth = (transactions || []).filter(t => String(t.date || '').startsWith(m)).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+                carriedDepositBalance += depositsInMonth - spentInMonth;
+            });
+            const activeDeposit = (monthlyDepositHistory[selectedMonth] || []).length
+                ? (monthlyDepositHistory[selectedMonth] || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0)
+                : (Number(monthlyDeposits[selectedMonth]) || 0);
+            // Saldo awal bulan berjalan berasal dari saldo akhir seluruh bulan sebelumnya.
+            // Termasuk kekurangan kasbon (saldo negatif), bukan pengisian baru.
+            const openingDepositBalance = carriedDepositBalance;
+            const depositAvailable = openingDepositBalance + activeDeposit;
+            const depositBalance = depositAvailable - monthTotalSpent;
+
+            // Analisis Pengeluaran Berdasarkan Bank Penerbit Kartu
+            const bankBreakdown = React.useMemo(() => {
+                const map = {};
+                monthlyTransactions.forEach(t => {
+                    const info = detectBankFromCardNumber(t.etollNumber, t.merchant);
+                    const bName = info.bank || 'Lainnya';
+                    if (!map[bName]) {
+                        map[bName] = { bank: bName, label: info.label, color: info.color, total: 0, count: 0 };
+                    }
+                    map[bName].total += Number(t.amount || 0);
+                    map[bName].count += 1;
+                });
+                return Object.values(map).sort((a, b) => b.total - a.total);
+            }, [monthlyTransactions]);
+
+            // Analisis Tren Pengeluaran Harian dalam Bulan Terpilih
+            const dailyTimeline = React.useMemo(() => {
+                const map = {};
+                monthlyTransactions.forEach(t => {
+                    const d = t.date || 'Lainnya';
+                    if (!map[d]) {
+                        map[d] = { date: d, total: 0, count: 0 };
+                    }
+                    map[d].total += Number(t.amount || 0);
+                    map[d].count += 1;
+                });
+                return Object.values(map).sort((a, b) => (a.date > b.date ? 1 : -1));
+            }, [monthlyTransactions]);
+
+            // Hitung Rasio Penyerapan Kasbon
+            const absorptionPercent = depositAvailable > 0 ? Math.min(100, Math.round((monthTotalSpent / depositAvailable) * 100)) : 0;
+            const isLiveMonthActive = selectedMonth === currentYearMonth;
+
+            return (
+                <div className="min-h-screen flex flex-col relative overflow-hidden">
+                    <header className="sticky top-0 z-40 glass-panel border-b border-slate-800 shadow-xl">
+                        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 via-indigo-600 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-brand-500/20 border border-brand-400/30">
+                                    <i className="fa-solid fa-road text-lg"></i>
+                                </div>
+                                <div>
+                                    <h1 className="font-black text-xl bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent flex items-center gap-2">
+                                        RekapToll
+                                        <span title={syncStatus.msg} className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 cursor-help ${
+                                            syncStatus.state === 'success' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' :
+                                            syncStatus.state === 'error' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
+                                            'bg-sky-500/20 text-sky-300 border-sky-500/30'
+                                        }`}>
+                                            <span className={`w-2 h-2 rounded-full ${
+                                                syncStatus.state === 'success' ? 'bg-emerald-400 animate-pulse' :
+                                                syncStatus.state === 'error' ? 'bg-rose-400' : 'bg-sky-400 animate-spin'
+                                            }`}></span>
+                                            <span>{syncStatus.state === 'success' ? 'DB Terhubung' : syncStatus.state === 'error' ? 'DB Error' : 'Menghubungkan…'}</span>
+                                        </span>
+                                    </h1>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setShowNfcModal(true)} className="bg-purple-600/80 hover:bg-purple-600 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-purple-900/30 border border-purple-400/30 transition backdrop-blur-md">
+                                    <i className="fa-solid fa-nfc-symbol text-sm animate-pulse"></i>
+                                    <span>NFC Reader</span>
+                                </button>
+                                <span className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-800 border border-slate-700">
+                                    <i className="fa-brands fa-telegram mr-1.5 text-sky-300"></i> Input transaksi melalui Bot Telegram
+                                </span>
+                                <button onClick={openAdminLogin} title={isAdminMode ? 'Keluar dari Mode Admin' : 'Masuk Mode Admin'} className={`font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg border transition ${isAdminMode ? 'bg-rose-600/90 hover:bg-rose-600 text-white border-rose-400/40 shadow-rose-900/30' : 'bg-slate-800/90 hover:bg-slate-700 text-amber-300 border-amber-500/30 shadow-slate-950/30'}`}>
+                                    <i className={`fa-solid ${isAdminMode ? 'fa-lock-open' : 'fa-user-shield'} text-xs`}></i>
+                                    <span>{isAdminMode ? 'Keluar Admin' : 'Mode Admin'}</span>
+                                </button>
+                                {isAdminMode && (
+                                    <button onClick={() => { setCurrentAdminPassword(''); setNewAdminPassword(''); setConfirmNewAdminPassword(''); setChangePasswordError(''); setShowChangeAdminPassword(true); }}
+                                        className="font-bold px-3 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20">
+                                        <i className="fa-solid fa-key"></i><span>Ganti Password</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Navigation Tabs */}
+                        <div className="max-w-7xl mx-auto px-4 flex space-x-2 border-t border-slate-800/80 overflow-x-auto custom-scrollbar">
+                            <button onClick={() => setActiveTab('dashboard')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'dashboard' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                <i className="fa-solid fa-chart-pie"></i> Dasbor & Visual Analytics
+                            </button>
+                            <button onClick={() => setActiveTab('transactions')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'transactions' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                <i className="fa-solid fa-receipt"></i> Tabel Transaksi ({transactions.length})
+                            </button>
+                            {isAdminMode && (
+                                <>
+                                    <button onClick={() => handleAdminTab('monthly_recap')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'monthly_recap' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-file-invoice-dollar text-amber-400"></i> Rekap SPJ
+                                    </button>
+                                    <button onClick={() => handleAdminTab('cloud_config')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'cloud_config' ? 'border-brand-500 text-brand-400 bg-brand-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-cloud text-sky-400"></i> Integrasi Bot & Drive
+                                    </button>
+                                    <button onClick={() => handleAdminTab('master_data')} className={`py-3 px-4 text-xs font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition ${activeTab === 'master_data' ? 'border-rose-500 text-rose-400 bg-rose-500/10' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+                                        <i className="fa-solid fa-database text-rose-400"></i> Master Data
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    </header>
+
+                    {showAdminLogin && (
+                        <div className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
+                            <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-5 shadow-2xl border border-amber-700/60">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                                        <i className="fa-solid fa-user-shield text-amber-400 text-lg"></i>
+                                    </div>
+                                    <div>
+                                        <h3 className="font-black text-white text-base">Mode Admin</h3>
+                                        <p className="text-[10px] text-slate-400">Akses Rekap SPJ, Integrasi Bot, Master Data & pengaturan penting</p>
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="block text-[11px] font-bold text-slate-300">Email Akun Firebase</label>
+                                    <input
+                                        type="email"
+                                        value={adminEmailInput}
+                                        onChange={e => { setAdminEmailInput(e.target.value); setAdminPassError(''); }}
+                                        placeholder="email admin..."
+                                        className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-amber-500"
+                                        autoFocus
+                                    />
+                                    <label className="block text-[11px] font-bold text-slate-300">Password Firebase</label>
+                                    <input
+                                        type="password"
+                                        value={adminPasswordInput}
+                                        onChange={e => { setAdminPasswordInput(e.target.value); setAdminPassError(''); }}
+                                        onKeyDown={e => { if (e.key === 'Enter') confirmAdminLogin(); }}
+                                        placeholder="Masukkan password akun Firebase..."
+                                        className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-amber-500"
+                                        autoFocus
+                                    />
+                                    {adminPassError && <p className="text-rose-400 text-[11px] font-bold"><i className="fa-solid fa-circle-exclamation mr-1"></i>{adminPassError}</p>}
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setShowAdminLogin(false); setAdminPasswordInput(''); setAdminEmailInput(''); setAdminPassError(''); }} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
+                                    <button onClick={confirmAdminLogin} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"><i className="fa-solid fa-unlock mr-1"></i>Masuk</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {showChangeAdminPassword && (
+                        <div className="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-3 backdrop-blur-md">
+                            <div className="glass-panel w-full max-w-md p-5 rounded-2xl border border-emerald-500/40 space-y-4 shadow-2xl">
+                                <div className="flex items-center justify-between border-b border-slate-700 pb-3">
+                                    <h3 className="font-black text-emerald-300"><i className="fa-solid fa-key mr-2"></i>Ganti Password Admin</h3>
+                                    <button onClick={() => setShowChangeAdminPassword(false)} className="text-slate-400 hover:text-white"><i className="fa-solid fa-xmark"></i></button>
+                                </div>
+                                <p className="text-xs text-slate-400">Password baru minimal 8 karakter dan disimpan sebagai hash SHA-256 di Firebase.</p>
+                                <label className="block text-xs font-bold text-slate-300">Password saat ini</label>
+                                <input type="password" autoComplete="current-password" value={currentAdminPassword} onChange={e => setCurrentAdminPassword(e.target.value)} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                <label className="block text-xs font-bold text-slate-300">Password baru</label>
+                                <input type="password" autoComplete="new-password" value={newAdminPassword} onChange={e => setNewAdminPassword(e.target.value)} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                <label className="block text-xs font-bold text-slate-300">Ulangi password baru</label>
+                                <input type="password" autoComplete="new-password" value={confirmNewAdminPassword} onChange={e => setConfirmNewAdminPassword(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') saveAdminPasswordChange(); }} className="w-full p-3 rounded-xl bg-slate-950 border border-slate-700 text-white" />
+                                {changePasswordError && <p className="text-xs text-rose-400 font-bold">{changePasswordError}</p>}
+                                <div className="flex gap-2">
+                                    <button onClick={() => setShowChangeAdminPassword(false)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-xs font-bold">Batal</button>
+                                    <button onClick={saveAdminPasswordChange} className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold">Simpan Password</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {toast && (
+                        <div className="fixed bottom-5 right-5 z-50 animate-bounce">
+                            <div className="px-4 py-3 rounded-2xl bg-slate-900/95 border border-slate-700 text-white flex items-center gap-3 text-xs font-medium shadow-2xl backdrop-blur-md">
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-xmark text-rose-400' : 'fa-circle-check text-emerald-400'} text-sm`}></i>
+                                <span>{toast.msg}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
+                        {activeTab === 'dashboard' && (
+                            <div className="space-y-6">
+                                {/* BANNER UTAMA BULAN BERJALAN & KONTROL CEPAT */}
+                                <div className="p-6 rounded-3xl bg-gradient-to-r from-blue-950/80 via-slate-900/90 to-indigo-950/80 border border-brand-500/30 shadow-2xl relative overflow-hidden backdrop-blur-xl">
+                                    <div className="absolute top-0 right-0 -mt-12 -mr-12 w-64 h-64 rounded-full bg-brand-500/10 blur-3xl pointer-events-none"></div>
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
+                                        <div className="space-y-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tracking-wide border shadow-sm ${
+                                                    isLiveMonthActive 
+                                                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40 animate-pulse' 
+                                                        : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                                }`}>
+                                                    <span className={`w-2 h-2 rounded-full ${isLiveMonthActive ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+                                                    {isLiveMonthActive ? 'BULAN BERJALAN (AKTIF)' : 'ARSIP PERIODE LAMPAU'}
+                                                </span>
+                                                <span className="text-xs font-mono text-slate-400">Periode: {selectedMonth}</span>
+                                            </div>
+                                            <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2">
+                                                <span>Dasbor Eksekutif e-Toll UNS</span>
+                                                <span className="text-brand-400 text-lg sm:text-xl font-medium">({formatDateIndo(`${selectedMonth}-01`).replace(/^1\s*/, '')})</span>
+                                            </h2>
+                                            <p className="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                                                Ringkasan realisasi operasional kartu e-Toll pengemudi, pemantauan batas kasbon anggaran, dan transparansi SPJ resmi Kantor Pusat UNS.
+                                            </p>
+                                        </div>
+
+                                        <div className="flex flex-wrap items-center gap-2.5 bg-slate-950/80 p-2 rounded-2xl border border-slate-800 shadow-inner">
+                                            <button 
+                                                onClick={() => setSelectedMonth(currentYearMonth)}
+                                                className={`px-3 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                                                    selectedMonth === currentYearMonth 
+                                                        ? 'bg-brand-600 text-white shadow-lg shadow-brand-600/30' 
+                                                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                                }`}
+                                            >
+                                                <i className="fa-solid fa-clock-rotate-left"></i>
+                                                <span>Bulan Berjalan ({currentYearMonth})</span>
+                                            </button>
+                                            
+                                            <div className="h-5 w-px bg-slate-800"></div>
+
+                                            <select
+                                                value={selectedMonth}
+                                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                                className="px-3 py-2 text-xs bg-slate-900 border border-slate-700/80 rounded-xl font-bold text-amber-300 focus:outline-none focus:ring-2 focus:ring-brand-500 cursor-pointer"
+                                            >
+                                                <option value="ALL">🗓️ Semua Periode</option>
+                                                {availableMonths.map(m => (
+                                                    <option key={m} value={m}>
+                                                        {m === currentYearMonth ? `⚡ ${m} (Bulan Berjalan)` : `📅 ${m}`}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 4 KARTU METRIK UTAMA DENGAN GRADASI VISUAL MEWAH */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {/* 1. Realisasi */}
+                                    <div className="glass-card p-5 rounded-3xl border border-blue-500/20 shadow-xl relative overflow-hidden group hover:border-blue-500/50 transition">
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-[11px] font-bold text-blue-300 uppercase tracking-wider">Total Realisasi e-Toll</p>
+                                            <div className="w-9 h-9 rounded-2xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold text-sm shadow-inner">
+                                                <i className="fa-solid fa-receipt"></i>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-2xl sm:text-3xl font-black text-white mt-2 tracking-tight">
+                                            {formatRupiah(monthTotalSpent)}
+                                        </h3>
+                                        <div className="mt-2.5 flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80">
+                                            <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                                                <i className="fa-solid fa-layer-group text-blue-400"></i> {monthlyTransactions.length} Struk Terverifikasi
+                                            </span>
+                                            <span className="font-bold text-emerald-400 font-mono">100% SPJ</span>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. Deposit Kasbon & Penyerapan */}
+                                    <div className="glass-card p-5 rounded-3xl border border-purple-500/20 shadow-xl relative overflow-hidden group hover:border-purple-500/50 transition">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-[11px] font-bold text-purple-300 uppercase tracking-wider">Deposit Kasbon Uang Muka</p>
+                                                    <button 
+                                                        onClick={() => { if (!isAdminMode) { openAdminLogin(); showToastNotification('Masuk Mode Admin untuk mengedit Deposit Kasbon.', 'info'); return; } openDepositModalForMonth(selectedMonth); }} 
+                                                        className="px-2 py-0.5 rounded-lg bg-purple-500/20 hover:bg-purple-500 text-purple-300 hover:text-white text-[10px] font-bold border border-purple-500/30 transition flex items-center gap-1 shadow-sm"
+                                                        title="Ubah Nominal Kasbon"
+                                                    >
+                                                        <i className="fa-solid fa-pen-to-square"></i> Edit
+                                                    </button>
+                                                </div>
+                                                <h3 className="text-2xl font-black text-white mt-2 tracking-tight">
+                                                    {formatRupiah(activeDeposit)}
+                                                </h3>
+                                                <p className="text-[11px] text-slate-400 mt-1">Saldo awal (sisa saldo bulan sebelumnya): <strong className={carriedDepositBalance < 0 ? 'text-rose-300' : 'text-emerald-300'}>{formatRupiah(carriedDepositBalance)}</strong></p>
+                                                <p className="text-[11px] text-slate-300 mt-0.5">Total dana tersedia: <strong className="text-white">{formatRupiah(depositAvailable)}</strong></p>
+                                            </div>
+                                            <div className="w-9 h-9 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold text-sm shadow-inner">
+                                                <i className="fa-solid fa-vault"></i>
+                                            </div>
+                                        </div>
+                                        <div className="mt-2.5 space-y-1 pt-2 border-t border-slate-800/80">
+                                            <div className="flex justify-between text-[11px] font-bold">
+                                                <span className="text-slate-400">Penyerapan:</span>
+                                                <span className={absorptionPercent >= 100 ? "text-rose-400" : "text-purple-300"}>
+                                                    {absorptionPercent}% Terpakai
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden border border-slate-800">
+                                                <div 
+                                                    className={`h-full rounded-full transition-all duration-700 ${
+                                                        absorptionPercent >= 100 
+                                                            ? 'bg-rose-500' 
+                                                            : absorptionPercent > 80 
+                                                            ? 'bg-amber-500' 
+                                                            : 'bg-gradient-to-r from-purple-500 to-indigo-500'
+                                                    }`}
+                                                    style={{ width: `${Math.min(absorptionPercent, 100)}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. Saldo Kasbon / Reimburse */}
+                                    <div className={`glass-card p-5 rounded-3xl border shadow-xl relative overflow-hidden transition ${
+                                        depositBalance >= 0 ? 'border-emerald-500/20 hover:border-emerald-500/50' : 'border-rose-500/30 hover:border-rose-500/60'
+                                    }`}>
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-300">
+                                                {depositBalance >= 0 ? 'Sisa Saldo Kasbon' : 'Kurang Bayar (Reimburse)'}
+                                            </p>
+                                            <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold text-sm shadow-inner ${
+                                                depositBalance >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'
+                                            }`}>
+                                                <i className={`fa-solid ${depositBalance >= 0 ? 'fa-scale-balanced' : 'fa-hand-holding-dollar'}`}></i>
+                                            </div>
+                                        </div>
+                                        <h3 className={`text-2xl font-black mt-2 tracking-tight ${depositBalance >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {formatRupiah(Math.abs(depositBalance))}
+                                        </h3>
+                                        <div className="mt-2.5 flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80">
+                                            <span className="text-slate-400">Status Keuangan:</span>
+                                            <span className={`font-black uppercase px-2 py-0.5 rounded-md text-[10px] ${
+                                                depositBalance >= 0 ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'
+                                            }`}>
+                                                {depositBalance >= 0 ? 'Saldo Aman' : 'Kelebihan Pakai'}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* 4. Driver & Armada Terlibat */}
+                                    <div className="glass-card p-5 rounded-3xl border border-amber-500/20 shadow-xl relative overflow-hidden group hover:border-amber-500/50 transition">
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">Armada / Driver Aktif</p>
+                                            <div className="w-9 h-9 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-sm shadow-inner">
+                                                <i className="fa-solid fa-van-shuttle"></i>
+                                            </div>
+                                        </div>
+                                        <h3 className="text-2xl sm:text-3xl font-black text-white mt-2 tracking-tight">
+                                            {cardBreakdown.length} <span className="text-base font-bold text-slate-400">Driver</span>
+                                        </h3>
+                                        <div className="mt-2.5 flex items-center justify-between text-[11px] pt-2 border-t border-slate-800/80">
+                                            <span className="text-slate-400">Rata-Rata / Driver:</span>
+                                            <span className="font-bold text-amber-300 font-mono">
+                                                {formatRupiah(cardBreakdown.length > 0 ? monthTotalSpent / cardBreakdown.length : 0)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* SECTION VISUAL ANALYTICS INTERAKTIF */}
+                                <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-2xl space-y-6">
+                                    {/* Header Visual Analytics dengan Tab Navigasi Khusus Grafik */}
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
+                                        <div>
+                                            <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                                                <i className="fa-solid fa-chart-pie text-brand-400"></i>
+                                                <span>Visual Analytics & Distribusi Anggaran</span>
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-0.5">Analisis grafis pengeluaran tol berdasarkan pengemudi, bank penerbit, dan timeline harian.</p>
+                                        </div>
+
+                                        <div className="flex items-center gap-1.5 bg-slate-950 p-1.5 rounded-2xl border border-slate-800 text-xs">
+                                            <button 
+                                                onClick={() => setAnalyticsViewMode('DRIVER')}
+                                                className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${
+                                                    analyticsViewMode === 'DRIVER' ? 'bg-brand-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                                                }`}
+                                            >
+                                                <i className="fa-solid fa-user-group"></i> Per Driver ({cardBreakdown.length})
+                                            </button>
+                                            <button 
+                                                onClick={() => setAnalyticsViewMode('BANK')}
+                                                className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${
+                                                    analyticsViewMode === 'BANK' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                                                }`}
+                                            >
+                                                <i className="fa-solid fa-credit-card"></i> Bank Penerbit ({bankBreakdown.length})
+                                            </button>
+                                            <button 
+                                                onClick={() => setAnalyticsViewMode('TIMELINE')}
+                                                className={`px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 ${
+                                                    analyticsViewMode === 'TIMELINE' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                                                }`}
+                                            >
+                                                <i className="fa-solid fa-calendar-days"></i> Tren Harian
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* VIEW 1: DISTRIBUSI PENGELUARAN PER DRIVER (LEADERBOARD) */}
+                                    {analyticsViewMode === 'DRIVER' && (
+                                        <div className="space-y-4">
+                                            <div className="flex justify-between items-center px-1">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                                    <i className="fa-solid fa-ranking-star text-amber-400"></i> Peringkat Penggunaan e-Toll Driver
+                                                </span>
+                                                <span className="text-xs font-mono font-bold text-brand-300">
+                                                    Total Akumulasi: {formatRupiah(monthTotalSpent)}
+                                                </span>
+                                            </div>
+
+                                            {cardBreakdown.length === 0 ? (
+                                                <div className="p-8 text-center bg-slate-900/60 rounded-2xl border border-slate-800 text-slate-400 text-xs">
+                                                    Belum ada transaksi e-Toll tercatat pada periode {selectedMonth}.
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                    {cardBreakdown.map((item, idx) => {
+                                                        const percent = monthTotalSpent > 0 ? ((item.total / monthTotalSpent) * 100).toFixed(1) : 0;
+                                                        const cardInfo = detectBankFromCardNumber(item.number, item.label);
+                                                        const isTop3 = idx < 3;
+
+                                                        return (
+                                                            <div 
+                                                                key={idx} 
+                                                                className={`p-4 rounded-2xl border transition-all duration-200 relative overflow-hidden group ${
+                                                                    idx === 0 
+                                                                        ? 'bg-gradient-to-r from-amber-950/30 to-slate-900 border-amber-500/40 hover:border-amber-400' 
+                                                                        : idx === 1 
+                                                                        ? 'bg-gradient-to-r from-slate-900 to-slate-900/80 border-slate-600 hover:border-slate-400'
+                                                                        : idx === 2 
+                                                                        ? 'bg-gradient-to-r from-amber-900/20 to-slate-900 border-amber-700/40 hover:border-amber-600'
+                                                                        : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
+                                                                }`}
+                                                            >
+                                                                <div className="flex items-center justify-between gap-2 mb-2">
+                                                                    <div className="flex items-center gap-2.5 min-w-0">
+                                                                        <span className={`w-7 h-7 rounded-xl flex items-center justify-center font-black text-xs shrink-0 shadow ${
+                                                                            idx === 0 ? 'bg-amber-400 text-slate-950' :
+                                                                            idx === 1 ? 'bg-slate-300 text-slate-950' :
+                                                                            idx === 2 ? 'bg-amber-700 text-white' :
+                                                                            'bg-slate-800 text-slate-300 border border-slate-700'
+                                                                        }`}>
+                                                                            {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}
+                                                                        </span>
+                                                                        <div className="min-w-0">
+                                                                            <h4 className="font-extrabold text-white text-xs truncate group-hover:text-brand-300 transition">
+                                                                                {item.label}
+                                                                            </h4>
+                                                                            <p className="text-[10px] text-amber-300 font-mono font-bold">
+                                                                                {item.nopol || 'AD 1214 XU'} • <span className="text-slate-400">{item.number}</span>
+                                                                            </p>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <div className="text-right shrink-0">
+                                                                        <p className="text-xs font-black text-white font-mono">{formatRupiah(item.total)}</p>
+                                                                        <span className="text-[10px] font-bold text-emerald-400 font-mono">{percent}% • {item.count} Tx</span>
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Progress Bar Dinamis */}
+                                                                <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800/80">
+                                                                    <div 
+                                                                        className={`h-full bg-gradient-to-r ${cardInfo.color || 'from-blue-500 to-indigo-600'} rounded-full transition-all duration-700`}
+                                                                        style={{ width: `${percent}%` }}
+                                                                    ></div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* VIEW 2: DISTRIBUSI PER BANK PENERBIT */}
+                                    {analyticsViewMode === 'BANK' && (
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                                {bankBreakdown.map((b, i) => {
+                                                    const percent = monthTotalSpent > 0 ? ((b.total / monthTotalSpent) * 100).toFixed(1) : 0;
+                                                    return (
+                                                        <div key={i} className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
+                                                            <div className="flex justify-between items-center">
+                                                                <span className="font-extrabold text-xs text-white flex items-center gap-1.5">
+                                                                    <i className="fa-solid fa-credit-card text-brand-400"></i>
+                                                                    {b.label}
+                                                                </span>
+                                                                <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                                                                    {percent}%
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xl font-black text-white font-mono">{formatRupiah(b.total)}</p>
+                                                            <div className="flex justify-between items-center text-[10px] text-slate-400 border-t border-slate-800 pt-2 font-medium">
+                                                                <span>Frekuensi Penggunaan</span>
+                                                                <span className="font-bold text-slate-200">{b.count} Transaksi</span>
+                                                            </div>
+                                                            <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                                                                <div 
+                                                                    className={`h-full bg-gradient-to-r ${b.color || 'from-blue-500 to-indigo-600'} rounded-full`}
+                                                                    style={{ width: `${percent}%` }}
+                                                                ></div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* VIEW 3: TIMELINE PENGELUARAN HARIAN */}
+                                    {analyticsViewMode === 'TIMELINE' && (
+                                        <div className="space-y-4">
+                                            <div className="p-4 bg-slate-900/90 rounded-2xl border border-slate-800 space-y-3">
+                                                <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                                                    <i className="fa-solid fa-timeline text-emerald-400"></i>
+                                                    Aktivitas Transaksi e-Toll Sepanjang Bulan
+                                                </h4>
+
+                                                {dailyTimeline.length === 0 ? (
+                                                    <p className="text-xs text-slate-500 text-center py-4">Belum ada riwayat transaksi.</p>
+                                                ) : (
+                                                    <div className="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                                                        {dailyTimeline.map((item, i) => (
+                                                            <div key={i} className="flex items-center justify-between p-2.5 bg-slate-950/70 rounded-xl border border-slate-800/80 text-xs">
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center font-bold text-xs">
+                                                                        {item.date ? item.date.slice(-2) : i + 1}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="font-bold text-white">{formatDateIndo(item.date)}</p>
+                                                                        <p className="text-[10px] text-slate-400">{item.count} Transaksi e-Toll</p>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="font-mono font-black text-brand-300 text-sm">
+                                                                    {formatRupiah(item.total)}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'transactions' && (
+                            <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5">
+                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-brand-600 to-indigo-600 text-white flex items-center justify-center font-bold shadow-lg shadow-brand-500/20 border border-brand-400/30">
+                                            <i className="fa-solid fa-receipt text-base"></i>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                                                <span>Riwayat & Tabel Transaksi e-Toll</span>
+                                                <span className="text-xs px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/30 font-bold">
+                                                    {filteredTransactions.length} Data
+                                                </span>
+                                            </h3>
+                                            <p className="text-[11px] text-slate-400">Klik baris transaksi untuk melihat detail struk & bukti gambar</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                                        <div className="relative w-full sm:w-56">
+                                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                                            <input
+                                                type="text"
+                                                placeholder="Cari driver, invoice, kartu..."
+                                                value={searchQuery}
+                                                onChange={(e) => setSearchQuery(e.target.value)}
+                                                className="pl-8 pr-3 py-2 text-xs bg-slate-900/90 border border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-500 w-full font-medium text-slate-100 placeholder-slate-500"
+                                            />
+                                        </div>
+
+                                        {/* Perbaikan Bug 8: Tambahkan Dropdown Filter Kartu */}
+                                        <select
+                                            value={selectedCardFilter}
+                                            onChange={(e) => setSelectedCardFilter(e.target.value)}
+                                            className="px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl font-bold text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        >
+                                            <option value="ALL">Semua Kartu</option>
+                                            {cards.map(c => (
+                                                <option key={c.id} value={c.number}>
+                                                    {c.label} ({c.number.slice(-4)})
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        <select
+                                            value={selectedMonth}
+                                            onChange={(e) => setSelectedMonth(e.target.value)}
+                                            className="px-3 py-2 text-xs bg-slate-900 border border-slate-700 rounded-xl font-bold text-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                                        >
+                                            <option value="ALL">🗓️ Semua Bulan</option>
+                                            {availableMonths.map(m => (
+                                                <option key={m} value={m}>📅 {m}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                    <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center font-bold">
+                                            <i className="fa-solid fa-wallet"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Total Terfilter</p>
+                                            <p className="font-extrabold text-white">{formatRupiah(tableStats.total)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center font-bold">
+                                            <i className="fa-solid fa-list-check"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Jumlah Transaksi</p>
+                                            <p className="font-extrabold text-white">{tableStats.count} Transaksi</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold">
+                                            <i className="fa-solid fa-calculator"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Rata-Rata / Struk</p>
+                                            <p className="font-extrabold text-white">{formatRupiah(tableStats.avg)}</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+                                            <i className="fa-solid fa-arrow-trend-up"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-400 font-semibold uppercase">Nominal Tertinggi</p>
+                                            <p className="font-extrabold text-white">{formatRupiah(tableStats.max)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="overflow-x-auto custom-scrollbar rounded-2xl border border-slate-800 shadow-xl">
+                                    <table className="w-full text-left text-xs border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-900/90 border-b border-slate-800 text-slate-300 font-extrabold uppercase tracking-wider text-[11px]">
+                                                <th onClick={() => handleSort('date')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-800/80 transition select-none">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>Tanggal</span>
+                                                        <i className={`fa-solid ${sortConfig.key === 'date' ? (sortConfig.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'} text-slate-500`}></i>
+                                                    </div>
+                                                </th>
+                                                <th onClick={() => handleSort('merchant')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-800/80 transition select-none">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>Nama Pengemudi / Unit</span>
+                                                        <i className={`fa-solid ${sortConfig.key === 'merchant' ? (sortConfig.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'} text-slate-500`}></i>
+                                                    </div>
+                                                </th>
+                                                <th onClick={() => handleSort('etollNumber')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-800/80 transition select-none">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>Nomor Kartu e-Toll</span>
+                                                        <i className={`fa-solid ${sortConfig.key === 'etollNumber' ? (sortConfig.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'} text-slate-500`}></i>
+                                                    </div>
+                                                </th>
+                                                <th onClick={() => handleSort('invoiceNumber')} className="py-3.5 px-4 cursor-pointer hover:bg-slate-800/80 transition select-none">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span>No. Bukti / Invoice</span>
+                                                        <i className={`fa-solid ${sortConfig.key === 'invoiceNumber' ? (sortConfig.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'} text-slate-500`}></i>
+                                                    </div>
+                                                </th>
+                                                <th className="py-3.5 px-4 text-center">Bukti Struk</th>
+                                                <th onClick={() => handleSort('amount')} className="py-3.5 px-4 text-right cursor-pointer hover:bg-slate-800/80 transition select-none">
+                                                    <div className="flex items-center justify-end gap-1.5">
+                                                        <span>Nominal (Rp)</span>
+                                                        <i className={`fa-solid ${sortConfig.key === 'amount' ? (sortConfig.direction === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort'} text-slate-500`}></i>
+                                                    </div>
+                                                </th>
+                                                <th className="py-3.5 px-4 text-center">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800/70 bg-slate-900/40 font-medium">
+                                            {filteredTransactions.map(tx => {
+                                                const driveUrl = tx.gdriveUrl || tx.driveFileUrl;
+                                                return (
+                                                    <tr key={tx.id} className="hover:bg-slate-800/70 transition group cursor-pointer border-l-4 border-transparent hover:border-brand-500" onClick={() => setInspectingTx(tx)}>
+                                                        <td className="py-3.5 px-4 whitespace-nowrap text-slate-300 font-bold">
+                                                            {formatDateIndo(tx.date)}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 font-bold text-white">
+                                                            {tx.merchant}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 font-mono font-bold text-slate-200 whitespace-nowrap">
+                                                            {formatCardNumber(tx.etollNumber)}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 font-mono text-slate-300 whitespace-nowrap">
+                                                            <span className="px-2.5 py-0.5 rounded-lg bg-indigo-950/70 font-bold border border-indigo-800/60 text-indigo-300 text-[11px]">
+                                                                {tx.invoiceNumber}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                                            {driveUrl ? (
+                                                                <button 
+                                                                    onClick={() => setInspectingTx(tx)}
+                                                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/80 border border-emerald-700/70 text-emerald-300 hover:text-white hover:bg-emerald-700 transition text-[11px] font-bold"
+                                                                >
+                                                                    <i className="fa-regular fa-image"></i>
+                                                                    <span>Lihat Struk</span>
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-slate-600 text-xs">-</span>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-right font-black text-brand-300 text-sm whitespace-nowrap">
+                                                            {formatRupiah(tx.amount)}
+                                                        </td>
+                                                        <td className="py-3.5 px-4 text-center whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                                            {isAdminMode && (
+                                                                <div className="flex items-center justify-center gap-1">
+                                                                <button onClick={() => setEditingTx(tx)} className="p-1.5 text-slate-400 hover:text-amber-400 hover:bg-amber-950/50 rounded-lg transition" title="Edit">
+                                                                    <i className="fa-solid fa-pen-to-square"></i>
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => {
+                                                                        setDeletingTx(tx);
+                                                                    }} 
+                                                                    className="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-950/50 rounded-lg transition" 
+                                                                    title="Hapus"
+                                                                >
+                                                                    <i className="fa-solid fa-trash-can"></i>
+                                                                </button>
+                                                            </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'monthly_recap' && (
+                            <div className="space-y-6">
+                                <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-5">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 border-b border-slate-800">
+                                        <div>
+                                            <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                                                <i className="fa-solid fa-file-invoice-dollar text-amber-400"></i>
+                                                <span>Penyusunan SPJ & Surat Perintah Bayar (SPBy)</span>
+                                            </h3>
+                                            <p className="text-xs text-slate-400 mt-0.5">Pengaturan Deposit Kasbon, Pengemudi & Kendaraan, Pejabat Penandatangan, dan Ekspor Dokumen</p>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <button onClick={handleExportExcel} className="px-3.5 py-2 bg-emerald-600/90 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl flex items-center gap-2 transition shadow">
+                                                <i className="fa-solid fa-file-excel"></i> Ekspor Excel (.xlsx)
+                                            </button>
+                                            <button onClick={() => setShowSpjPrintModal(true)} className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-2 transition shadow-lg shadow-amber-500/20">
+                                                <i className="fa-solid fa-print"></i> Buka Dokumen SPJ Resmi
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Deposit Input */}
+                                    <div className="p-4 bg-slate-900/80 rounded-2xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                        <div>
+                                            <p className="text-xs font-bold text-white uppercase tracking-wider">Deposit Uang Muka (Kasbon) Bulan {selectedMonth === 'ALL' ? currentYearMonth : selectedMonth}</p>
+                                            <p className="text-[11px] text-slate-400">Nominal dasar kasbon operasional yang akan dipertanggungjawabkan pada SPJ.</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 w-full sm:w-auto">
+                                            <span className="text-xs font-bold text-slate-400">Rp</span>
+                                            <input 
+                                                type="number" 
+                                                value={monthlyDeposits[selectedMonth === 'ALL' ? currentYearMonth : selectedMonth] ?? 0}
+                                                readOnly
+                                                className="p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm w-44"
+                                            />
+                                            <span className="px-3.5 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl">Input melalui Bot Telegram</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Pengaturan Nama Driver & Nopol */}
+                                    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-3">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-2 border-b border-slate-800">
+                                            <div>
+                                                <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                                                    <i className="fa-solid fa-id-card-clip"></i>
+                                                    <span>Pengaturan Nama Driver & No. Polisi Yang Dicetak Pada SPJ ({selectedMonth})</span>
+                                                </h4>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Edit nama pengemudi dan plat nopol kendaraan langsung di sini untuk menyesuaikan lembar cetak SPJ.</p>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <div className="flex items-center gap-1.5 bg-slate-950 px-3 py-1.5 rounded-xl border border-slate-700">
+                                                    <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
+                                                        <i className="fa-solid fa-arrow-down-short-wide text-brand-400"></i> Urutkan:
+                                                    </span>
+                                                    <select
+                                                        value={spjSortBy}
+                                                        onChange={(e) => setSpjSortBy(e.target.value)}
+                                                        className="bg-transparent text-amber-300 font-bold text-xs focus:outline-none cursor-pointer"
+                                                    >
+                                                        <option value="total-desc" className="bg-slate-900 text-white">💰 Nominal Terbesar</option>
+                                                        <option value="total-asc" className="bg-slate-900 text-white">🪙 Nominal Terkecil</option>
+                                                        <option value="name-asc" className="bg-slate-900 text-white">👤 Nama Driver (A-Z)</option>
+                                                        <option value="nopol-asc" className="bg-slate-900 text-white">🚗 No. Polisi (Nopol)</option>
+                                                        <option value="card-asc" className="bg-slate-900 text-white">💳 Nomor e-Toll</option>
+                                                        <option value="master-order" className="bg-slate-900 text-white">📋 Urutan Master Asli</option>
+                                                    </select>
+                                                </div>
+                                                <span className="text-[10px] font-bold px-2.5 py-1.5 rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                                                    {cardBreakdown.length} Driver Terlibat
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="overflow-x-auto custom-scrollbar rounded-xl border border-slate-800">
+                                            <table className="w-full text-left text-xs border-collapse">
+                                                <thead>
+                                                    <tr className="bg-slate-950 text-slate-400 uppercase font-bold text-[10px] tracking-wider border-b border-slate-800">
+                                                        <th className="py-2.5 px-3 w-10 text-center">No</th>
+                                                        <th className="py-2.5 px-3">Nomor e-Toll</th>
+                                                        <th className="py-2.5 px-3">Nama Driver (Tampil di SPJ)</th>
+                                                        <th className="py-2.5 px-3">No. Polisi (Tampil di SPJ)</th>
+                                                        <th className="py-2.5 px-3 text-right">Total Bulan Ini</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-800/80 bg-slate-900/50">
+                                                    {sortedSpjDriverList.map((item, idx) => {
+                                                        const clean = item.number.replace(/\D/g, '');
+                                                        return (
+                                                            <tr key={item.number} className="hover:bg-slate-800/40 transition">
+                                                                <td className="py-2.5 px-3 text-center font-bold text-slate-400">{idx + 1}</td>
+                                                                <td className="py-2.5 px-3 font-mono text-slate-300 font-bold whitespace-nowrap">{item.number}</td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={item.label}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value;
+                                                                            setCards(prev => {
+                                                                                const existingIdx = prev.findIndex(c => (c.number || '').replace(/\D/g, '') === clean);
+                                                                                let updated;
+                                                                                if (existingIdx >= 0) {
+                                                                                    updated = [...prev];
+                                                                                    updated[existingIdx] = { ...updated[existingIdx], label: val };
+                                                                                } else {
+                                                                                    const detected = detectBankFromCardNumber(item.number);
+                                                                                    updated = [...prev, {
+                                                                                        id: 'card-' + Date.now(),
+                                                                                        label: val,
+                                                                                        nopol: item.nopol || 'AD 1060 XA',
+                                                                                        number: item.number,
+                                                                                        bank: detected.bank,
+                                                                                        color: detected.color
+                                                                                    }];
+                                                                                }
+                                                                                pushToCloud('cards', updated);
+                                                                                return updated;
+                                                                            });
+                                                                        }}
+                                                                        className="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-white font-medium text-xs focus:ring-1 focus:ring-amber-400"
+                                                                        placeholder="Masukkan nama driver..."
+                                                                    />
+                                                                </td>
+                                                                <td className="py-2.5 px-3">
+                                                                    <input 
+                                                                        type="text"
+                                                                        value={item.nopol}
+                                                                        onChange={(e) => {
+                                                                            const val = e.target.value.toUpperCase();
+                                                                            setCards(prev => {
+                                                                                const existingIdx = prev.findIndex(c => (c.number || '').replace(/\D/g, '') === clean);
+                                                                                let updated;
+                                                                                if (existingIdx >= 0) {
+                                                                                    updated = [...prev];
+                                                                                    updated[existingIdx] = { ...updated[existingIdx], nopol: val };
+                                                                                } else {
+                                                                                    const detected = detectBankFromCardNumber(item.number);
+                                                                                    updated = [...prev, {
+                                                                                        id: 'card-' + Date.now(),
+                                                                                        label: item.label,
+                                                                                        nopol: val,
+                                                                                        number: item.number,
+                                                                                        bank: detected.bank,
+                                                                                        color: detected.color
+                                                                                    }];
+                                                                                }
+                                                                                pushToCloud('cards', updated);
+                                                                                return updated;
+                                                                            });
+                                                                        }}
+                                                                        className="w-full p-2 bg-slate-950 border border-slate-700 rounded-lg text-amber-300 font-mono font-bold uppercase text-xs focus:ring-1 focus:ring-amber-400"
+                                                                        placeholder="Contoh: AD 1060 XA"
+                                                                    />
+                                                                </td>
+                                                                <td className="py-2.5 px-3 text-right font-black text-brand-300 whitespace-nowrap">
+                                                                    {formatRupiah(item.total)}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    {/* Pejabat Configuration Form */}
+                                    <div className="p-5 bg-slate-900/80 rounded-2xl border border-slate-800 space-y-4">
+                                        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-2 pb-2 border-b border-slate-800">
+                                            <div>
+                                                <h4 className="text-xs font-bold text-brand-300 uppercase tracking-wider flex items-center gap-2">
+                                                    <i className="fa-solid fa-signature text-amber-400"></i>
+                                                    <span>Konfigurasi 4 Pejabat Penandatangan SPJ UNS</span>
+                                                </h4>
+                                                <p className="text-[11px] text-slate-400 mt-0.5">Nama & NIP 4 pejabat yang menandatangani Kuitansi, SPBy, dan Lembar Rekapitulasi.</p>
+                                            </div>
+                                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 w-fit">
+                                                4 Pejabat Lengkap
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+                                            {/* 1. Penanggungjawab Pengemudi */}
+                                            <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
+                                                <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
+                                                    <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">1</span>
+                                                    <p className="font-bold text-amber-300">Penanggungjawab Pengemudi</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.applicantName || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, applicantName: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: Anda Mas Nurhidayanto"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">NIP</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.applicantNip || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, applicantNip: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: 1990090620160801"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* 2. Kasubdit RT, TU dan Logistik */}
+                                            <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
+                                                <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
+                                                    <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">2</span>
+                                                    <p className="font-bold text-amber-300">Kasubdit RT, TU dan Logistik</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.kasubditName || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, kasubditName: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: Widyo Agung Nugroho. S.Kom."
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">NIP</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.kasubditNip || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, kasubditNip: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: 198110212008121001"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* 3. Pejabat Pembuat Komitmen (PPK) */}
+                                            <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
+                                                <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
+                                                    <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">3</span>
+                                                    <p className="font-bold text-amber-300">Pejabat Pembuat Komitmen (PPK)</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.ppkName || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, ppkName: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: Marsilia Dika Pramesti S.E."
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">NIP</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.ppkNip || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, ppkNip: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: 198608222008122001"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            {/* 4. Bendahara Pengeluaran Pembantu (BPP) */}
+                                            <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
+                                                <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
+                                                    <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">4</span>
+                                                    <p className="font-bold text-amber-300">Bendahara Pengeluaran Pembantu (BPP)</p>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.bppName || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, bppName: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: Rita Hindrawati, S.S."
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-0.5">NIP</label>
+                                                    <input 
+                                                        type="text" 
+                                                        value={spjProfile.bppNip || ''} 
+                                                        onChange={e => setSpjProfile({...spjProfile, bppNip: e.target.value})}
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono focus:ring-1 focus:ring-amber-400"
+                                                        placeholder="Contoh: 198203102009102001"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Pengaturan Nomor & Administrasi Dokumen SPJ */}
+                                        <div className="p-3.5 bg-slate-950/50 rounded-xl border border-slate-800 space-y-2.5">
+                                            <p className="text-[11px] font-bold text-slate-300 flex items-center gap-2">
+                                                <i className="fa-solid fa-file-pen text-indigo-400"></i>
+                                                <span>Data Nomor Bukti & Mata Anggaran (Kuitansi & SPBy)</span>
+                                            </p>
+                                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Nomor Bukti</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={spjProfile.buktiNo || ''}
+                                                        onChange={e => setSpjProfile({...spjProfile, buktiNo: e.target.value})}
+                                                        placeholder="Contoh: BK-08/2026/01"
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-1 focus:ring-indigo-400"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Nomor SPBy</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={spjProfile.spbyNo || ''}
+                                                        onChange={e => setSpjProfile({...spjProfile, spbyNo: e.target.value})}
+                                                        placeholder="Contoh: 104/UN27/SPBY/2026"
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-1 focus:ring-indigo-400"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Tanggal SPBy</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={spjProfile.spbyDate || ''}
+                                                        onChange={e => setSpjProfile({...spjProfile, spbyDate: e.target.value})}
+                                                        placeholder="Contoh: 31 Agustus 2026"
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white text-xs focus:ring-1 focus:ring-indigo-400"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-400 block mb-1">Mata Anggaran (MAK)</label>
+                                                    <input 
+                                                        type="text"
+                                                        value={spjProfile.mak || ''}
+                                                        onChange={e => setSpjProfile({...spjProfile, mak: e.target.value})}
+                                                        placeholder="Contoh: 023.17.WA.525111"
+                                                        className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-mono text-xs focus:ring-1 focus:ring-indigo-400"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex justify-end pt-1">
+                                            <button 
+                                                onClick={() => handleUpdateSpjProfile(spjProfile)}
+                                                className="bg-brand-600 hover:bg-brand-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl transition shadow-lg flex items-center gap-2"
+                                            >
+                                                <i className="fa-solid fa-floppy-disk"></i>
+                                                <span>Simpan Profil Pejabat & Administrasi</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'cloud_config' && (
+                            <div className="glass-card p-6 rounded-3xl border border-slate-700/70 shadow-xl space-y-6 max-w-4xl mx-auto">
+                                <div className="border-b border-slate-800 pb-3">
+                                    <h3 className="font-extrabold text-base text-white flex items-center gap-2">
+                                        <i className="fa-solid fa-cloud text-sky-400"></i>
+                                        <span>Konfigurasi Firebase & Google Drive Webhook</span>
+                                    </h3>
+                                    <p className="text-xs text-slate-400 mt-0.5">Sinkronisasi data multi-device dan pencadangan foto struk otomatis ke Google Drive.</p>
+                                </div>
+
+                                <div className="space-y-4 text-xs">
+                                    <div className="space-y-1.5">
+                                        <label className="block text-slate-300 font-bold">Firebase Realtime Database — tertanam di aplikasi:</label>
+                                        <div className="w-full p-3 rounded-xl border border-emerald-700/60 bg-emerald-950/30 text-emerald-200 font-mono text-sm break-all">
+                                            Project ID: etoll-3366c<br />
+                                            URL: https://etoll-3366c-default-rtdb.asia-southeast1.firebasedatabase.app
+                                        </div>
+                                        <p className="text-[11px] text-slate-400">Tidak perlu mengisi Project ID di halaman muka atau menyimpannya secara manual. Aplikasi langsung memakai database ini.</p>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="block text-slate-300 font-bold">Gemini API Key (Google AI Studio OCR):</label>
+                                        <input 
+                                            type="password" 
+                                            value={geminiApiKey} 
+                                            onChange={e => setGeminiApiKey(e.target.value)}
+                                            placeholder="AIzaSy..."
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                                        />
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="block text-slate-300 font-bold">Google Apps Script Webhook URL (Google Drive):</label>
+                                        <input 
+                                            type="text" 
+                                            value={gdriveWebhookUrl} 
+                                            onChange={e => setGdriveWebhookUrl(e.target.value)}
+                                            placeholder="https://script.google.com/macros/s/.../exec"
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm"
+                                        />
+                                    </div>
+
+                                    <div className="pt-2 flex justify-end">
+                                        <button 
+                                            onClick={handleSaveCloudSettings}
+                                            className="px-5 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white font-bold rounded-xl text-xs shadow-lg transition"
+                                        >
+                                            Simpan & Uji Koneksi Cloud
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'master_data' && (
+                            <MasterDataTab 
+                                cards={cards} 
+                                setCards={setCards} 
+                                transactions={transactions} 
+                                setTransactions={setTransactions} 
+                                setMonthlyDeposits={setMonthlyDeposits} 
+                                firebaseProjectId={firebaseProjectId} 
+                                fetchCloudData={fetchCloudData} 
+                                showToastNotification={showToastNotification} 
+                                handleAddCard={handleAddCard} 
+                                deletedCardNumbers={deletedCardNumbers} 
+                                setDeletedCardNumbers={setDeletedCardNumbers} 
+                                pushToCloud={pushToCloud}
+                            />
+                        )}
+                    </main>
+
+                    {inspectingTx && (
+                        <InspectTransactionModal 
+                            transaction={inspectingTx}
+                            onClose={() => setInspectingTx(null)}
+                        />
+                    )}
+
+                    {showSpjPrintModal && (
+                        <SpjPrintModal 
+                            spjProfile={spjProfile}
+                            selectedMonth={selectedMonth}
+                            transactions={transactions}
+                            depositAmount={depositAvailable}
+                            cards={cards}
+                            spjSortBy={spjSortBy}
+                            setSpjSortBy={setSpjSortBy}
+                            onClose={() => setShowSpjPrintModal(false)}
+                        />
+                    )}
+
+                    {showScanModal && (
+                        <ScanAndAddModal 
+                            userApiKey={geminiApiKey}
+                            setGeminiApiKey={setGeminiApiKey}
+                            checkDuplicateInvoice={checkDuplicateInvoice}
+                            cards={cards}
+                            onSave={handleSaveTransaction}
+                            onClose={() => setShowScanModal(false)}
+                            showToastNotification={showToastNotification}
+                            dailyUsage={dailyUsage}
+                            freeDailyLimit={FREE_DAILY_LIMIT}
+                            updateDailyUsage={updateDailyUsage}
+                            gdriveWebhookUrl={gdriveWebhookUrl}
+                        />
+                    )}
+
+                    {showNfcModal && (
+                        <NfcModal 
+                            cards={cards}
+                            transactions={transactions}
+                            currentMonth={selectedMonth}
+                            onClose={() => setShowNfcModal(false)}
+                        />
+                    )}
+
+                    {editingTx && (
+                        <EditTransactionModal 
+                            transaction={editingTx}
+                            onSave={handleSaveTransaction}
+                            onClose={() => setEditingTx(null)}
+                        />
+                    )}
+
+                    {showDepositModal && (
+                        <div className="fixed inset-0 z-50 bg-black/85 flex items-start sm:items-center justify-center p-2 sm:p-4 backdrop-blur-md modal-backdrop overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                            <div className="glass-panel p-4 sm:p-6 rounded-3xl max-w-md w-full space-y-4 shadow-2xl border border-purple-500/50 my-auto" style={{ maxHeight: 'calc(100vh - 1rem)', overflowY: 'auto', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch' }}>
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                                    <h3 className="font-extrabold text-base flex items-center gap-2 text-purple-300">
+                                        <i className="fa-solid fa-vault"></i> {editingDepositId ? 'Edit Riwayat Pengisian' : 'Deposit Kasbon Uang Muka'}
+                                    </h3>
+                                    <button onClick={() => { setShowDepositModal(false); setEditingDepositId(null); }} className="text-slate-400 hover:text-white text-lg">
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-4 text-xs">
+                                    <div className="p-3 rounded-xl border border-purple-500/30 bg-purple-500/10">
+                                        <p className="text-[11px] font-bold text-purple-200">Saldo awal dari sisa saldo bulan sebelumnya</p>
+                                        <p className={`font-mono font-black text-lg ${openingDepositBalance < 0 ? 'text-rose-300' : 'text-emerald-300'}`}>{formatRupiah(openingDepositBalance)}</p>
+                                        <p className="text-[10px] text-slate-400">Saldo awal bukan setoran baru. Saldo akhir = saldo awal + total pengisian − realisasi e-Toll.</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Periode Bulan:</label>
+                                        <select
+                                            value={depositModalMonth}
+                                            onChange={async (e) => {
+                                                const m = e.target.value;
+                                                setDepositModalMonth(m);
+                                                setDepositModalValue('');
+                                                setDepositModalDate(getLocalDateString().slice(0,7) === m ? getLocalDateString() : `${m}-01`);
+                                                if (firebaseProjectId) {
+                                                    try {
+                                                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/monthlyDepositHistory/${m}.json`;
+                                                        const response = await fetch(url, { cache: 'no-store' });
+                                                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                                                        const data = await response.json();
+                                                        const history = Array.isArray(data) ? data.filter(Boolean) : (data && typeof data === 'object' ? Object.values(data).filter(Boolean) : []);
+                                                        setMonthlyDepositHistory(prev => ({ ...prev, [m]: history }));
+                                                    } catch (err) { showToastNotification('Riwayat bulan tersebut belum berhasil dimuat dari Firebase.', 'error'); }
+                                                }
+                                            }}
+                                            className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-amber-300 font-bold"
+                                        >
+                                            {availableMonths.map(m => (
+                                                <option key={m} value={m}>📅 Periode {m}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">{editingDepositId ? 'Ubah Nominal Pengisian (Rp):' : 'Nominal Pengisian Baru (Rp):'}</label>
+                                        <input 
+                                            type="number"
+                                            value={depositModalValue}
+                                            onChange={(e) => setDepositModalValue(e.target.value)}
+                                            placeholder="Masukkan nominal pengisian baru, mis. 5000000"
+                                            className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-base font-bold focus:ring-2 focus:ring-purple-500"
+                                            autoFocus
+                                        />
+                                        <p className="text-[11px] text-emerald-400 font-bold mt-1.5 flex items-center gap-1.5">
+                                            <i className="fa-solid fa-money-bill-wave"></i>
+                                            <span>Terbaca: {formatRupiah(Number(depositModalValue) || 0)}</span>
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Tanggal Pengisian:</label>
+                                        <input type="date" value={depositModalDate} onChange={e => setDepositModalDate(e.target.value)} className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-300 mb-1">Bukti Pengisian (JPG/JPEG):</label>
+                                        <input type="file" accept="image/jpeg,image/jpg" onChange={async e => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            if (!/^image\/(jpeg|jpg)$/i.test(file.type) && !/\.jpe?g$/i.test(file.name)) { showToastNotification('Bukti harus berupa JPG/JPEG.', 'error'); e.target.value = ''; return; }
+                                            if (file.size > 12 * 1024 * 1024) { showToastNotification('Ukuran JPG maksimal 12 MB.', 'error'); e.target.value = ''; return; }
+                                            try {
+                                                const reader = new FileReader();
+                                                reader.onload = async ev => {
+                                                    try { const compressed = await compressImageDataUrl(ev.target.result, 1100, 0.62); setDepositProofData(compressed); setDepositProofName(file.name); }
+                                                    catch (err) { showToastNotification(err.message || 'Gagal membaca bukti JPG.', 'error'); }
+                                                };
+                                                reader.readAsDataURL(file);
+                                            } catch (err) { showToastNotification('Gagal memproses bukti JPG.', 'error'); }
+                                        }} className="block w-full text-[11px] text-slate-300 file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-purple-600 file:text-white" />
+                                        {depositProofData && <div className="mt-2 flex items-center gap-3 rounded-xl border border-emerald-700/50 bg-emerald-950/20 p-2"><img src={depositProofData} alt="Preview bukti deposit" className="w-16 h-16 object-cover rounded-lg" /><div className="min-w-0 flex-1"><p className="text-[10px] text-emerald-300 font-bold">Bukti siap disimpan</p><p className="text-[10px] text-slate-400 truncate">{depositProofName}</p></div><button type="button" onClick={() => { setDepositProofData(''); setDepositProofName(''); }} className="text-rose-300 text-xs">Hapus</button></div>}
+                                        <p className="text-[10px] text-slate-500 mt-1">Gambar dikompres otomatis agar ukuran penyimpanan lebih hemat.</p>
+                                    </div>
+                                    <div className="rounded-xl border border-slate-700 bg-slate-950/70 p-3 space-y-2">
+                                        <p className="text-[10px] font-black uppercase tracking-wider text-purple-300">Riwayat Pengisian {depositModalMonth}</p>
+                                        <div className="flex justify-between items-center rounded-lg bg-purple-500/10 px-2.5 py-2">
+                                            <span className="text-[10px] text-slate-300">Total pengisian bulan ini</span>
+                                            <strong className="text-sm text-emerald-300 font-mono">{formatRupiah((monthlyDepositHistory[depositModalMonth] || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0) + ((monthlyDepositHistory[depositModalMonth] || []).length ? 0 : (Number(monthlyDeposits[depositModalMonth]) || 0)))}</strong>
+                                        </div>
+                                        {(monthlyDepositHistory[depositModalMonth] || []).length === 0 ? <p className="text-[11px] text-slate-500">Belum ada riwayat pengisian pada bulan ini.</p> : <div className="max-h-52 overflow-y-auto space-y-2">{[...(monthlyDepositHistory[depositModalMonth] || [])].sort((a,b) => String(b.date).localeCompare(String(a.date))).map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-2 text-[11px]"><div className="min-w-0"><p className="font-bold text-white">{formatDateIndo(item.date)}{String(item.id || '').startsWith('opening_') ? ' · Saldo awal' : ''}</p><p className="text-emerald-300 font-mono">{formatRupiah(item.amount)}</p>{item.proofName && <p className="text-[9px] text-slate-500 truncate">{item.proofName}</p>}</div><div className="flex items-center gap-2">{item.proofData ? <a href={item.proofData} target="_blank" rel="noreferrer" className="text-blue-300 underline">Lihat JPG</a> : <span className="text-slate-500">Tanpa bukti</span>}{!String(item.id || '').startsWith('opening_') && <><button type="button" onClick={() => startEditDeposit(depositModalMonth, item)} className="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 hover:bg-amber-500/30 font-bold"><i className="fa-solid fa-pen"></i> Edit</button><button type="button" onClick={() => deleteDepositEntry(depositModalMonth, item)} className="px-2 py-1 rounded-md bg-rose-500/15 text-rose-300 hover:bg-rose-500/30 font-bold"><i className="fa-solid fa-trash"></i> Hapus</button></>}</div></div>)}</div>}
+                                    </div>
+
+                                    <div>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Pilihan Cepat Nominal:</p>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[10000000, 15000000, 20000000, 25000000, 30000000, 35000000].map(val => (
+                                                <button
+                                                    key={val}
+                                                    type="button"
+                                                    onClick={() => setDepositModalValue(String(val))}
+                                                    className={`py-1.5 px-2 rounded-xl text-[11px] font-bold border transition ${
+                                                        Number(depositModalValue) === val 
+                                                            ? 'bg-purple-600 border-purple-400 text-white' 
+                                                            : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                                                    }`}
+                                                >
+                                                    {val / 1000000} Juta
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2 border-t border-slate-800">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setShowDepositModal(false); setEditingDepositId(null); }} 
+                                        className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button 
+                                        type="button" 
+                                        disabled={depositSaving}
+                                        onClick={async () => {
+                                            setDepositSaving(true);
+                                            const ok = editingDepositId
+                                                ? await saveDepositEdit()
+                                                : await handleUpdateDeposit(depositModalMonth, depositModalValue, depositModalDate, depositProofData, depositProofName);
+                                            setDepositSaving(false);
+                                            if (ok) { setDepositProofData(''); setDepositProofName(''); setEditingDepositId(null); setDepositModalValue(''); }
+                                        }} 
+                                        className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-lg transition"
+                                    >
+                                        {depositSaving ? 'Menyimpan…' : (editingDepositId ? 'Simpan Perubahan' : 'Simpan Pengisian')}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {deletingTx && (
+                        <div className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4 backdrop-blur-md">
+                            <div className="glass-panel p-6 rounded-3xl max-w-sm w-full space-y-4 shadow-2xl border border-rose-800/80 text-xs">
+                                <h4 className="font-extrabold text-sm text-white flex items-center gap-2 text-rose-400">
+                                    <i className="fa-solid fa-trash-can text-rose-500"></i>
+                                    <span>Konfirmasi Hapus Transaksi</span>
+                                </h4>
+                                <div className="p-3 bg-slate-950/80 rounded-2xl border border-slate-800 space-y-1">
+                                    <p className="text-slate-300">
+                                        Anda akan menghapus transaksi bukti <strong>{deletingTx.invoiceNumber || deletingTx.merchant}</strong>:
+                                    </p>
+                                    <p className="font-bold text-white text-sm font-mono text-brand-300">
+                                        {formatRupiah(deletingTx.amount)} • {deletingTx.merchant}
+                                    </p>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="block text-[11px] font-bold text-slate-300">
+                                        <i className="fa-solid fa-lock mr-1 text-rose-400"></i> Masukkan Password Admin (anda321):
+                                    </label>
+                                    <input 
+                                        type="password"
+                                        value={deleteTxPassword}
+                                        onChange={e => { setDeleteTxPassword(e.target.value); setDeleteTxPassError(''); }}
+                                        placeholder="Masukkan password konfirmasi..."
+                                        className="w-full p-2.5 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-rose-500"
+                                        autoFocus
+                                    />
+                                    {deleteTxPassError && (
+                                        <p className="text-rose-400 text-[11px] font-bold flex items-center gap-1">
+                                            <i className="fa-solid fa-circle-exclamation"></i> {deleteTxPassError}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2 pt-2">
+                                    <button 
+                                        onClick={() => {
+                                            setDeletingTx(null);
+                                        }} 
+                                        className="flex-1 py-2.5 border border-slate-700 rounded-xl text-slate-300 hover:bg-slate-800 font-bold"
+                                    >
+                                        Batal
+                                    </button>
+                                    <button 
+                                        onClick={() => {
+                                            handleDeleteTransaction(deletingTx.id);
+                                        }} 
+                                        className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-500 text-white rounded-xl font-bold shadow-lg transition"
+                                    >
+                                        Hapus Permanen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
