@@ -4012,23 +4012,10 @@
                                             <input 
                                                 type="number" 
                                                 value={monthlyDeposits[selectedMonth === 'ALL' ? currentYearMonth : selectedMonth] ?? 0}
-                                                onChange={(e) => {
-                                                    const val = Number(e.target.value) || 0;
-                                                    const target = selectedMonth === 'ALL' ? currentYearMonth : selectedMonth;
-                                                    setMonthlyDeposits(prev => ({ ...prev, [target]: val }));
-                                                }}
-                                                className="p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm w-44 focus:ring-2 focus:ring-brand-500"
+                                                readOnly
+                                                className="p-2 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono font-bold text-sm w-44"
                                             />
-                                            <button
-                                                onClick={() => {
-                                                    const target = selectedMonth === 'ALL' ? currentYearMonth : selectedMonth;
-                                                    const currentVal = monthlyDeposits[target] ?? 0;
-                                                    handleUpdateDeposit(target, currentVal);
-                                                }}
-                                                className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl transition shadow flex items-center gap-1.5"
-                                            >
-                                                <i className="fa-solid fa-floppy-disk"></i> Simpan
-                                            </button>
+                                            <span className="px-3.5 py-2 bg-slate-800 text-slate-300 font-bold text-xs rounded-xl">Input melalui Bot Telegram</span>
                                         </div>
                                     </div>
 
