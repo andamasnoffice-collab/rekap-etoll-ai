@@ -2399,17 +2399,8 @@
                 }
             });
 
-            // Perbaikan Bug 1 & 2: Pertahankan data transaksi kosong / parsial tanpa memaksa dummy
-            const [transactions, setTransactions] = React.useState(() => {
-                const saved = safeStorageGet('etoll_transactions');
-                if (saved !== null) {
-                    try {
-                        const parsed = JSON.parse(saved);
-                        if (Array.isArray(parsed)) return parsed;
-                    } catch (e) {}
-                }
-                return INITIAL_DUMMY_TXS;
-            });
+            // Firebase adalah sumber kebenaran; cache dan dummy lokal tidak ditampilkan sebagai transaksi resmi.
+            const [transactions, setTransactions] = React.useState([]);
 
             // Konfigurasi Firebase ditanam langsung pada aplikasi; tidak membaca ID dari halaman atau localStorage.
             const FIREBASE_PROJECT_ID = 'etoll-3366c';
@@ -2418,22 +2409,11 @@
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
             const [gdriveWebhookUrl, setGdriveWebhookUrl] = React.useState(() => safeStorageGet('etoll_gdrive_webhook') || '');
 
-            const [monthlyDeposits, setMonthlyDeposits] = React.useState(() => {
-                try {
-                    return JSON.parse(safeStorageGet('etoll_monthly_deposits')) || { 
-                        [currentYearMonth]: 0,
-                        '2026-08': 0
-                    };
-                } catch (e) {
-                    return { [currentYearMonth]: 0 };
-                }
-            });
+            // Saldo deposit resmi hanya berasal dari Firebase.
+            const [monthlyDeposits, setMonthlyDeposits] = React.useState({});
             // Riwayat setoran disimpan terpisah dari nominal saldo bulanan agar kompatibel
             // dengan data monthlyDeposits lama yang sudah ada di Firebase.
-            const [monthlyDepositHistory, setMonthlyDepositHistory] = React.useState(() => {
-                try { return JSON.parse(safeStorageGet('etoll_monthly_deposit_history')) || {}; }
-                catch (e) { return {}; }
-            });
+            const [monthlyDepositHistory, setMonthlyDepositHistory] = React.useState({});
 
             const [dailyUsage, setDailyUsage] = React.useState(() => {
                 const today = getLocalDateString();
@@ -2630,6 +2610,8 @@
                     showToastNotification('Tanggal pengisian harus berada pada bulan/periode yang dipilih.', 'error'); return false;
                 }
                 if (num <= 0) { showToastNotification('Masukkan nominal pengisian lebih dari Rp0.', 'error'); return false; }
+                showToastNotification('Data deposit hanya dimasukkan melalui Bot Telegram. Dashboard ini baca-saja.', 'info');
+                return false;
                 const previousEntries = monthlyDepositHistory[targetMonth] || [];
                 // Kompatibilitas data lama: nominal bulanan lama dipertahankan sebagai saldo awal
                 // hanya saat belum ada riwayat setoran untuk periode tersebut.
@@ -2664,6 +2646,8 @@
             };
 
             const persistDepositHistory = async (month, entries, successMessage) => {
+                showToastNotification('Riwayat deposit dikelola melalui Bot Telegram. Dashboard hanya membaca Firebase.', 'info');
+                return false;
                 const nextHistory = { ...monthlyDepositHistory, [month]: entries };
                 const total = entries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
                 const nextDeposits = { ...monthlyDeposits, [month]: total };
@@ -2868,11 +2852,9 @@
                                     ? Object.entries(data).filter(([, value]) => value && typeof value === 'object')
                                         .map(([key, value]) => ({ id: key, ...value }))
                                     : []);
-                            const deleted = new Set((JSON.parse(safeStorageGet('etoll_deleted_cards') || '[]') || [])
-                                .map(n => String(n).replace(/\D/g, '')));
-                            setCards(cloudCards.filter(c => !deleted.has(String(c?.number || '').replace(/\D/g, ''))));
-                        } else if (path === 'monthlyDeposits' && data) {
-                            setMonthlyDeposits(data);
+                            setCards(cloudCards);
+                        } else if (path === 'monthlyDeposits') {
+                            setMonthlyDeposits(data && typeof data === 'object' ? data : {});
                         } else if (path === 'depositHistory') {
                             const history = Array.isArray(data)
                                 ? data.filter(Boolean)
@@ -2882,10 +2864,10 @@
                     }
 
                     const monthly = [...byId.values()];
+                    // Snapshot bulan dari Firebase menggantikan data bulan tersebut; tidak merge cache lokal.
                     setTransactions(prev => {
                         const outsideMonth = prev.filter(tx => String(tx.date || '').slice(0,7) !== monthKey);
-                        const merged = [...outsideMonth, ...monthly];
-                        const unique = new Map(merged.map(tx => [String(tx.id), tx]));
+                        const unique = new Map([...outsideMonth, ...monthly].map(tx => [String(tx.id), tx]));
                         return [...unique.values()].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
                     });
 
@@ -2937,13 +2919,12 @@
 
             React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
             React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
-            React.useEffect(() => { safeStorageSet('etoll_transactions', JSON.stringify(transactions)); }, [transactions]);
+            // Transaksi operasional tidak dicache ke localStorage; Firebase adalah sumber tunggal.
             React.useEffect(() => { safeStorageSet('etoll_fb_pid', firebaseProjectId); }, [firebaseProjectId]);
             React.useEffect(() => { safeStorageSet('etoll_gemini_key', geminiApiKey); }, [geminiApiKey]);
             React.useEffect(() => { safeStorageSet('etoll_gdrive_webhook', gdriveWebhookUrl); }, [gdriveWebhookUrl]);
             React.useEffect(() => { safeStorageSet('etoll_spj_profile', JSON.stringify(spjProfile)); }, [spjProfile]);
-            React.useEffect(() => { safeStorageSet('etoll_monthly_deposits', JSON.stringify(monthlyDeposits)); }, [monthlyDeposits]);
-            React.useEffect(() => { safeStorageSet('etoll_monthly_deposit_history', JSON.stringify(monthlyDepositHistory)); }, [monthlyDepositHistory]);
+            // Saldo dan riwayat deposit tidak dicache sebagai data resmi.
 
             const showToastNotification = (msg, type = 'success') => {
                 setToast({ msg, type });
@@ -2995,6 +2976,8 @@
             };
 
             const handleSaveTransaction = async (txData) => {
+                showToastNotification('Input transaksi dilakukan melalui Bot Telegram. Dashboard hanya membaca Firebase.', 'info');
+                return false;
                 let cardNum = formatCardNumber(txData.etollNumber);
                 if (cardNum && !cards.some(c => (c.number || '').replace(/\D/g, '') === cardNum.replace(/\D/g, ''))) {
                     const cleanNum = cardNum.replace(/\D/g, '');
@@ -3034,6 +3017,8 @@
             };
 
             const handleDeleteTransaction = async (id) => {
+                showToastNotification('Transaksi dikelola melalui Bot Telegram. Dashboard hanya membaca Firebase.', 'info');
+                return false;
                 const txToDelete = transactions.find(t => String(t.id) === String(id));
                 setDeletingTx(null);
                 if (firebaseProjectId) {
