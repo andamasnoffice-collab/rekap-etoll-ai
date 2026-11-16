@@ -773,8 +773,9 @@
                     }
                     const [drivers, vehicles] = await Promise.all([readList('masterDrivers'), readList('masterVehicles')]);
                     if (active) {
-                        setMasterDrivers(normalizeMasterNames([...drivers, ...JSON.parse(safeStorageGet('etoll_master_drivers', '[]') || '[]')]));
-                        setMasterVehicles(normalizeMasterNames([...vehicles, ...JSON.parse(safeStorageGet('etoll_master_vehicles', '[]') || '[]')]));
+                        // Production: Firebase adalah sumber otoritatif; localStorage tidak digabungkan.
+                        setMasterDrivers(normalizeMasterNames(drivers));
+                        setMasterVehicles(normalizeMasterNames(vehicles));
                         setMasterListsLoaded(true);
                     }
                 };
