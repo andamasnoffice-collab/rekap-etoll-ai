@@ -2637,29 +2637,8 @@
             };
 
             const persistDepositHistory = async (month, entries, successMessage) => {
-                if (!isAdminMode) {
-                    openAdminLogin();
-                    showToastNotification('Mode Admin diperlukan untuk mengoreksi riwayat deposit.', 'info');
-                    return false;
-                }
-                if (!/^\d{4}-\d{2}$/.test(month) || !Array.isArray(entries)) {
-                    showToastNotification('Periode atau data riwayat deposit tidak valid.', 'error');
-                    return false;
-                }
-                const total = entries.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
-                try {
-                    const historySaved = await pushToCloud(`monthlyDepositHistory/${month}`, entries);
-                    if (!historySaved) throw new Error('Riwayat deposit gagal disimpan.');
-                    const depositsSaved = await pushToCloud(`monthlyDeposits/${month}`, total);
-                    if (!depositsSaved) throw new Error('Total deposit gagal disimpan.');
-                    setMonthlyDepositHistory(prev => ({ ...prev, [month]: entries }));
-                    setMonthlyDeposits(prev => ({ ...prev, [month]: total }));
-                    showToastNotification(successMessage || 'Koreksi riwayat deposit berhasil disimpan ke Firebase.', 'success');
-                    return true;
-                } catch (e) {
-                    showToastNotification(`Koreksi deposit gagal: ${e.message}`, 'error');
-                    return false;
-                }
+                showToastNotification('Koreksi riwayat deposit hanya dapat dilakukan melalui Bot Telegram. Dashboard ini baca-saja.', 'info');
+                return false;
             };
 
             const startEditDeposit = (month, item) => {
@@ -2677,29 +2656,13 @@
             };
 
             const saveDepositEdit = async () => {
-                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk mengedit riwayat deposit.', 'info'); return false; }
-                const month = depositModalMonth;
-                const amount = Math.max(0, Number(depositModalValue) || 0);
-                if (!editingDepositId || amount <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(depositModalDate) || depositModalDate.slice(0,7) !== month) {
-                    showToastNotification('Periksa nominal dan tanggal pengisian.', 'error'); return false;
-                }
-                const entries = (monthlyDepositHistory[month] || []).map(item => item.id === editingDepositId
-                    ? { ...item, amount, date: depositModalDate, proofData: depositProofData || item.proofData || '', proofName: depositProofName || item.proofName || '', updatedAt: new Date().toISOString() }
-                    : item);
-                const ok = await persistDepositHistory(month, entries, 'Riwayat pengisian berhasil diperbarui.');
-                if (ok) setEditingDepositId(null);
-                return ok;
+                showToastNotification('Edit deposit melalui dashboard dinonaktifkan. Gunakan Bot Telegram.', 'info');
+                return false;
             };
 
             const deleteDepositEntry = async (month, item) => {
-                if (!isAdminMode) { openAdminLogin(); showToastNotification('Mode Admin diperlukan untuk menghapus riwayat deposit.', 'info'); return; }
-                if (String(item.id || '').startsWith('opening_')) {
-                    showToastNotification('Saldo awal bawaan tidak dapat dihapus dari riwayat.', 'info'); return;
-                }
-                if (!window.confirm(`Hapus pengisian ${formatDateIndo(item.date)} sebesar ${formatRupiah(item.amount)}?`)) return;
-                const entries = (monthlyDepositHistory[month] || []).filter(row => row.id !== item.id);
-                await persistDepositHistory(month, entries, 'Riwayat pengisian berhasil dihapus.');
-                if (editingDepositId === item.id) setEditingDepositId(null);
+                showToastNotification('Hapus deposit melalui dashboard dinonaktifkan. Gunakan Bot Telegram/admin backend.', 'info');
+                return false;
             };
 
             const pushToCloud = async (path, data) => {
@@ -2997,94 +2960,13 @@
             };
 
             const handleSaveTransaction = async (txData) => {
-                if (!isAdminMode) {
-                    openAdminLogin();
-                    showToastNotification('Mode Admin diperlukan untuk mengoreksi transaksi.', 'info');
-                    return false;
-                }
-                if (!txData?.id) {
-                    showToastNotification('Transaksi baru hanya dapat dimasukkan melalui Bot Telegram.', 'info');
-                    return false;
-                }
-                const oldTx = transactions.find(t => String(t.id) === String(txData.id));
-                if (!oldTx) {
-                    showToastNotification('Transaksi tidak ditemukan pada data Firebase yang sedang tampil. Muat ulang sebelum mengedit.', 'error');
-                    return false;
-                }
-                const updatedTx = {
-                    ...oldTx,
-                    ...txData,
-                    id: String(oldTx.id),
-                    etollNumber: formatCardNumber(txData.etollNumber),
-                    amount: Number(txData.amount || 0),
-                    date: String(txData.date || oldTx.date).slice(0,10),
-                    updatedAt: new Date().toISOString(),
-                    correctedBy: 'admin'
-                };
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(updatedTx.date) || updatedTx.amount < 0) {
-                    showToastNotification('Tanggal atau nominal transaksi tidak valid.', 'error');
-                    return false;
-                }
-                const oldMonth = String(oldTx.date || '').slice(0,7);
-                const newMonth = updatedTx.date.slice(0,7);
-                if (!oldMonth || !newMonth) {
-                    showToastNotification('Periode transaksi tidak valid; perubahan dibatalkan.', 'error');
-                    return false;
-                }
-                try {
-                    if (oldMonth !== newMonth) {
-                        const del = await fetch(`https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/transactionsByMonth/${oldMonth}/${encodeURIComponent(updatedTx.id)}.json`, { method: 'DELETE', cache: 'no-store' });
-                        if (!del.ok) throw new Error(`Gagal memindahkan data lama (HTTP ${del.status})`);
-                    }
-                    const saved = await pushToCloud(`transactionsByMonth/${newMonth}/${updatedTx.id}`, updatedTx);
-                    if (!saved) throw new Error('Firebase menolak penyimpanan koreksi.');
-                    setTransactions(prev => {
-                        const rest = prev.filter(t => String(t.id) !== String(updatedTx.id));
-                        return [...rest, updatedTx].sort((x,y) => new Date(y.date || 0) - new Date(x.date || 0));
-                    });
-                    setEditingTx(null);
-                    setSelectedMonth(newMonth);
-                    showToastNotification('Koreksi transaksi berhasil dikonfirmasi Firebase.', 'success');
-                    return true;
-                } catch (e) {
-                    showToastNotification(`Koreksi gagal disimpan ke Firebase: ${e.message}`, 'error');
-                    return false;
-                }
+                showToastNotification('Koreksi transaksi melalui dashboard dinonaktifkan. Input operasional dilakukan melalui Bot Telegram.', 'info');
+                return false;
             };
 
             const handleDeleteTransaction = async (id) => {
-                if (!isAdminMode) {
-                    openAdminLogin();
-                    showToastNotification('Mode Admin diperlukan untuk menghapus transaksi.', 'info');
-                    return false;
-                }
-                const txToDelete = transactions.find(t => String(t.id) === String(id));
-                if (!txToDelete) {
-                    showToastNotification('Transaksi tidak ditemukan pada data Firebase yang sedang tampil.', 'error');
-                    return false;
-                }
-                const monthKey = String(txToDelete.date || '').slice(0,7);
-                if (!/^\d{4}-\d{2}$/.test(monthKey)) {
-                    showToastNotification('Periode transaksi tidak valid; penghapusan dibatalkan.', 'error');
-                    return false;
-                }
-                try {
-                    const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/transactionsByMonth/${monthKey}/${encodeURIComponent(String(id))}.json`;
-                    const response = await fetch(url, { method: 'DELETE', cache: 'no-store' });
-                    if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-                    const confirmation = await fetch(url, { cache: 'no-store' });
-                    if (!confirmation.ok) throw new Error(`Gagal memverifikasi penghapusan (HTTP ${confirmation.status})`);
-                    const remaining = await confirmation.json();
-                    if (remaining !== null) throw new Error('Firebase masih mengembalikan record transaksi setelah penghapusan.');
-                    setTransactions(prev => prev.filter(t => String(t.id) !== String(id)));
-                    setDeletingTx(null);
-                    setDeleteTxPassword('');
-                    showToastNotification('Transaksi berhasil dihapus dan diverifikasi pada Firebase.', 'success');
-                    return true;
-                } catch (e) {
-                    showToastNotification(`Gagal menghapus transaksi dari Firebase: ${e.message}`, 'error');
-                    return false;
-                }
+                showToastNotification('Hapus transaksi melalui dashboard dinonaktifkan. Gunakan prosedur admin/backend yang terotorisasi.', 'info');
+                return false;
             };
 
             const handleExportExcel = () => {
