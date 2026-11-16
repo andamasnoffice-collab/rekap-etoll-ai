@@ -3315,10 +3315,9 @@
                                     <i className="fa-solid fa-nfc-symbol text-sm animate-pulse"></i>
                                     <span>NFC Reader</span>
                                 </button>
-                                <button onClick={() => setShowScanModal(true)} className="bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg shadow-brand-900/40 border border-brand-400/30 transition">
-                                    <i className="fa-solid fa-camera text-xs"></i>
-                                    <span>Scan Struk</span>
-                                </button>
+                                <span className="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-800 border border-slate-700">
+                                    <i className="fa-brands fa-telegram mr-1.5 text-sky-300"></i> Input transaksi melalui Bot Telegram
+                                </span>
                                 <button onClick={openAdminLogin} title={isAdminMode ? 'Keluar dari Mode Admin' : 'Masuk Mode Admin'} className={`font-bold px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg border transition ${isAdminMode ? 'bg-rose-600/90 hover:bg-rose-600 text-white border-rose-400/40 shadow-rose-900/30' : 'bg-slate-800/90 hover:bg-slate-700 text-amber-300 border-amber-500/30 shadow-slate-950/30'}`}>
                                     <i className={`fa-solid ${isAdminMode ? 'fa-lock-open' : 'fa-user-shield'} text-xs`}></i>
                                     <span>{isAdminMode ? 'Keluar Admin' : 'Mode Admin'}</span>
