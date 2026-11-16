@@ -2882,7 +2882,7 @@
                 const targetPid = (firebaseProjectId || '').trim();
                 if (!targetPid) return;
                 fetchCloudData(null, selectedMonth);
-            }, [firebaseProjectId, selectedMonth, fetchCloudData]);
+            }, [firebaseProjectId, selectedMonth, fetchCloudData, authUser]);
 
             React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
             React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
