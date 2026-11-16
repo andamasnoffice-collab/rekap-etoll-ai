@@ -529,7 +529,7 @@
     </script>
 
     <script type="text/babel">
-        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
+        function MasterDataTab({ isAdminMode, cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
             const [securityModal, setSecurityModal] = React.useState(null);
             const [passwordInput, setPasswordInput] = React.useState('');
             const [passError, setPassError] = React.useState('');
@@ -547,31 +547,6 @@
             const [newDriverName, setNewDriverName] = React.useState('');
             const [newVehiclePlate, setNewVehiclePlate] = React.useState('');
             const [masterListsLoaded, setMasterListsLoaded] = React.useState(false);
-
-            const DEFAULT_ADMIN_PASSWORD_HASH = '3616b7291853d3c5e0f022afd87dea74e392770899a0e67b172f9c1227794612';
-            const hashAdminPassword = async (value) => {
-                if (!window.crypto?.subtle) throw new Error('Browser tidak mendukung enkripsi password. Gunakan Chrome/Edge terbaru.');
-                const bytes = new TextEncoder().encode(String(value));
-                const digest = await window.crypto.subtle.digest('SHA-256', bytes);
-                return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-            };
-            React.useEffect(() => {
-                let cancelled = false;
-                (async () => {
-                    try {
-                        if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi');
-                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
-                        const response = await fetch(url, { cache: 'no-store' });
-                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-                        const value = await response.json();
-                        if (!cancelled) setAdminPasswordHash(typeof value === 'string' && value ? value : DEFAULT_ADMIN_PASSWORD_HASH);
-                    } catch (err) {
-                        if (!cancelled) setAdminPasswordHash(DEFAULT_ADMIN_PASSWORD_HASH);
-                        console.warn('Admin password setting load:', err.message);
-                    }
-                })();
-                return () => { cancelled = true; };
-            }, [firebaseProjectId]);
 
             const migrationBase = () => {
                 const pid = (firebaseProjectId || '').trim();
@@ -659,10 +634,8 @@
                 showToastNotification('Memproses konfirmasi…', 'info');
                 if (!securityModal) return;
                 const { type, payload } = securityModal;
-                // Hapus kartu memakai dialog konfirmasi khusus; tipe ini tidak meminta password.
-                // Aksi lain tetap memakai validasi password.
-                if (type !== 'DELETE_CARD' && passwordInput !== REQUIRED_PASSWORD) {
-                    setPassError('Password konfirmasi salah! Harap periksa kembali.');
+                if (!isAdminMode) {
+                    setPassError('Aksi ini memerlukan akun Firebase dengan klaim admin.');
                     return;
                 }
 
@@ -4350,6 +4323,7 @@
 
                         {activeTab === 'master_data' && (
                             <MasterDataTab 
+                                isAdminMode={isAdminMode} 
                                 cards={cards} 
                                 setCards={setCards} 
                                 transactions={transactions} 
