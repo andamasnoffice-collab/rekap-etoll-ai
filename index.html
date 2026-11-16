@@ -5245,7 +5245,7 @@
                     showToastNotification('Mode Admin diperlukan untuk mengoreksi riwayat deposit.', 'info');
                     return false;
                 }
-                if (!/^\\d{4}-\\d{2}$/.test(month) || !Array.isArray(entries)) {
+                if (!/^\d{4}-\d{2}$/.test(month) || !Array.isArray(entries)) {
                     showToastNotification('Periode atau data riwayat deposit tidak valid.', 'error');
                     return false;
                 }
@@ -5424,9 +5424,9 @@
                     if (requestedMonth === 'ALL') {
                         try {
                             const keys = await readJson('transactionsByMonth', '?shallow=true');
-                            monthKeys = Object.keys(keys || {}).filter(k => /^\\d{4}-\\d{2}$/.test(k)).sort();
+                            monthKeys = Object.keys(keys || {}).filter(k => /^\d{4}-\d{2}$/.test(k)).sort();
                         } catch (e) {
-                            monthKeys = (cloudMonthKeys || []).filter(k => /^\\d{4}-\\d{2}$/.test(k));
+                            monthKeys = (cloudMonthKeys || []).filter(k => /^\d{4}-\d{2}$/.test(k));
                             if (!monthKeys.length) throw e;
                         }
                     } else {
@@ -5624,7 +5624,7 @@
                     updatedAt: new Date().toISOString(),
                     correctedBy: 'admin'
                 };
-                if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(updatedTx.date) || updatedTx.amount < 0) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(updatedTx.date) || updatedTx.amount < 0) {
                     showToastNotification('Tanggal atau nominal transaksi tidak valid.', 'error');
                     return false;
                 }
@@ -5667,7 +5667,7 @@
                     return false;
                 }
                 const monthKey = String(txToDelete.date || '').slice(0,7);
-                if (!/^\\d{4}-\\d{2}$/.test(monthKey)) {
+                if (!/^\d{4}-\d{2}$/.test(monthKey)) {
                     showToastNotification('Periode transaksi tidak valid; penghapusan dibatalkan.', 'error');
                     return false;
                 }
