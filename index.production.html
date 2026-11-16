@@ -2873,7 +2873,7 @@
                 };
                 discoverCloudMonths();
                 return () => { cancelled = true; };
-            }, [firebaseProjectId]);
+            }, [firebaseProjectId, authUser]);
 
             // Hemat kuota: ambil data saat aplikasi dibuka atau saat bulan/proyek berubah.
             // Tidak memakai polling maupun EventSource permanen. Perubahan dari perangkat lain
