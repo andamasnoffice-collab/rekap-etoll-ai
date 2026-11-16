@@ -2665,6 +2665,11 @@
             };
 
             const pushToCloud = async (path, data) => {
+                // Pengguna Anonymous hanya memiliki akses baca. Semua penulisan dari dashboard wajib melalui sesi Admin.
+                if (!isAdminMode) {
+                    setSyncStatus({ state: 'error', msg: 'Akses tulis ditolak: login Admin diperlukan.' });
+                    return false;
+                }
                 if (!firebaseProjectId) {
                     setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
                     return false;
@@ -2700,7 +2705,7 @@
 
             // Perbaikan Bug 2: Jangan sinkronkan kartu yang sudah sengaja dihapus
             React.useEffect(() => {
-                if (!transactions || transactions.length === 0) return;
+                if (!isAdminMode || !transactions || transactions.length === 0) return;
                 let addedAny = false;
                 const existingCleanNums = new Set(cards.map(c => (c.number || '').replace(/\D/g, '')));
                 const deletedSet = new Set(deletedCardNumbers);
@@ -2747,7 +2752,7 @@
                         return updated;
                     });
                 }
-            }, [transactions, deletedCardNumbers, cards]);
+            }, [isAdminMode, transactions, deletedCardNumbers, cards]);
 
             const fetchCloudData = React.useCallback(async (pidOverride = null, monthOverride = null) => {
                 const targetPid = String(pidOverride !== null ? pidOverride : firebaseProjectId).trim();
