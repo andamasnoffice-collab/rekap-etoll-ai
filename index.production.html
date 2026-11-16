@@ -2506,18 +2506,32 @@
             const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
 
             React.useEffect(() => {
+                let creatingAnonymousSession = false;
                 const unsubscribe = window.rekaptollAuth.onIdTokenChanged(async user => {
-                    setAuthUser(user || null);
                     if (!user) {
+                        setAuthUser(null);
                         setAuthClaims({});
                         setIsAdminMode(false);
+                        // Pengguna umum otomatis mendapat sesi Firebase Anonymous.
+                        if (!creatingAnonymousSession) {
+                            creatingAnonymousSession = true;
+                            try {
+                                await window.rekaptollAuth.signInAnonymously();
+                            } catch (err) {
+                                console.error('[Auth] Gagal membuat sesi anonymous:', err);
+                                setSyncStatus({ state: 'error', msg: 'Gagal memulai sesi pengguna. Periksa konfigurasi Anonymous Authentication.' });
+                            } finally {
+                                creatingAnonymousSession = false;
+                            }
+                        }
                         return;
                     }
+                    setAuthUser(user);
                     try {
                         const result = await user.getIdTokenResult();
                         const claims = result.claims || {};
                         setAuthClaims(claims);
-                        setIsAdminMode(claims.admin === true);
+                        setIsAdminMode(user.isAnonymous !== true && claims.admin === true);
                     } catch (err) {
                         console.error('[Auth] Gagal membaca custom claims:', err);
                         setAuthClaims({});
@@ -2528,7 +2542,8 @@
             }, []);
 
             const openAdminLogin = async () => {
-                if (authUser) {
+                // Sesi anonymous tetap dipertahankan saat membuka formulir login admin.
+                if (authUser && authUser.isAnonymous !== true) {
                     await window.rekaptollAuth.signOut();
                     setIsAdminMode(false);
                     if (['monthly_recap', 'cloud_config', 'master_data'].includes(activeTab)) setActiveTab('dashboard');
@@ -2549,7 +2564,7 @@
                     const claims = tokenResult.claims || {};
                     setAuthClaims(claims);
                     setAuthUser(credential.user);
-                    if (claims.admin !== true && claims.reader !== true) {
+                    if (credential.user.isAnonymous === true || (claims.admin !== true && claims.reader !== true)) {
                         await window.rekaptollAuth.signOut();
                         throw new Error('Akun belum memiliki hak akses admin atau reader.');
                     }
