@@ -48,6 +48,38 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script>
+      const REKAPTOLL_FIREBASE_CONFIG = {
+        apiKey: "AIzaSyA3Gtz2w1erDlP_FTPTHOes1YZoQ56jJU",
+        authDomain: "rekaptoll-production.firebaseapp.com",
+        databaseURL: "https://rekaptoll-production-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "rekaptoll-production",
+        storageBucket: "rekaptoll-production.firebasestorage.app",
+        messagingSenderId: "441481183431",
+        appId: "1:441481183431:web:d6490b7f1269a6334bfee2"
+      };
+      if (!firebase.apps.length) firebase.initializeApp(REKAPTOLL_FIREBASE_CONFIG);
+      window.rekaptollAuth = firebase.auth();
+      window.rekaptollAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+      const _nativeFetch = window.fetch.bind(window);
+      window.fetch = async (input, init = {}) => {
+        const rawUrl = typeof input === 'string' ? input : input.url;
+        let parsed;
+        try { parsed = new URL(rawUrl, window.location.href); } catch (_) { return _nativeFetch(input, init); }
+        if (!parsed.hostname.endsWith('firebasedatabase.app')) return _nativeFetch(input, init);
+        const user = window.rekaptollAuth.currentUser;
+        if (!user) return new Response(JSON.stringify({ error: 'AUTH_REQUIRED' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+        const token = await user.getIdToken();
+        parsed.searchParams.set('auth', token);
+        const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
+        headers.set('Accept', 'application/json');
+        return _nativeFetch(new Request(parsed.toString(), { ...init, headers }));
+      };
+    </script>
+
+
     <style>
         body { 
             font-family: 'Inter', sans-serif; 
@@ -497,7 +529,7 @@
     </script>
 
     <script type="text/babel">
-        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
+        function MasterDataTab({ isAdminMode, cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
             const [securityModal, setSecurityModal] = React.useState(null);
             const [passwordInput, setPasswordInput] = React.useState('');
             const [passError, setPassError] = React.useState('');
@@ -515,31 +547,6 @@
             const [newDriverName, setNewDriverName] = React.useState('');
             const [newVehiclePlate, setNewVehiclePlate] = React.useState('');
             const [masterListsLoaded, setMasterListsLoaded] = React.useState(false);
-
-            const DEFAULT_ADMIN_PASSWORD_HASH = '3616b7291853d3c5e0f022afd87dea74e392770899a0e67b172f9c1227794612';
-            const hashAdminPassword = async (value) => {
-                if (!window.crypto?.subtle) throw new Error('Browser tidak mendukung enkripsi password. Gunakan Chrome/Edge terbaru.');
-                const bytes = new TextEncoder().encode(String(value));
-                const digest = await window.crypto.subtle.digest('SHA-256', bytes);
-                return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-            };
-            React.useEffect(() => {
-                let cancelled = false;
-                (async () => {
-                    try {
-                        if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi');
-                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
-                        const response = await fetch(url, { cache: 'no-store' });
-                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-                        const value = await response.json();
-                        if (!cancelled) setAdminPasswordHash(typeof value === 'string' && value ? value : DEFAULT_ADMIN_PASSWORD_HASH);
-                    } catch (err) {
-                        if (!cancelled) setAdminPasswordHash(DEFAULT_ADMIN_PASSWORD_HASH);
-                        console.warn('Admin password setting load:', err.message);
-                    }
-                })();
-                return () => { cancelled = true; };
-            }, [firebaseProjectId]);
 
             const migrationBase = () => {
                 const pid = (firebaseProjectId || '').trim();
@@ -627,10 +634,8 @@
                 showToastNotification('Memproses konfirmasi…', 'info');
                 if (!securityModal) return;
                 const { type, payload } = securityModal;
-                // Hapus kartu memakai dialog konfirmasi khusus; tipe ini tidak meminta password.
-                // Aksi lain tetap memakai validasi password.
-                if (type !== 'DELETE_CARD' && passwordInput !== REQUIRED_PASSWORD) {
-                    setPassError('Password konfirmasi salah! Harap periksa kembali.');
+                if (!isAdminMode) {
+                    setPassError('Aksi ini memerlukan akun Firebase dengan klaim admin.');
                     return;
                 }
 
@@ -768,8 +773,9 @@
                     }
                     const [drivers, vehicles] = await Promise.all([readList('masterDrivers'), readList('masterVehicles')]);
                     if (active) {
-                        setMasterDrivers(normalizeMasterNames([...drivers, ...JSON.parse(safeStorageGet('etoll_master_drivers', '[]') || '[]')]));
-                        setMasterVehicles(normalizeMasterNames([...vehicles, ...JSON.parse(safeStorageGet('etoll_master_vehicles', '[]') || '[]')]));
+                        // Production: Firebase adalah sumber otoritatif; localStorage tidak digabungkan.
+                        setMasterDrivers(normalizeMasterNames(drivers));
+                        setMasterVehicles(normalizeMasterNames(vehicles));
                         setMasterListsLoaded(true);
                     }
                 };
@@ -2394,7 +2400,7 @@
             const [transactions, setTransactions] = React.useState([]);
 
             // Konfigurasi Firebase ditanam langsung pada aplikasi; tidak membaca ID dari halaman atau localStorage.
-            const FIREBASE_PROJECT_ID = 'etoll-3366c';
+            const FIREBASE_PROJECT_ID = 'rekaptoll-production';
             const [firebaseProjectId] = React.useState(FIREBASE_PROJECT_ID);
             const [cloudMonthKeys, setCloudMonthKeys] = React.useState([]);
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
@@ -2469,6 +2475,9 @@
             const [adminPasswordHash, setAdminPasswordHash] = React.useState('');
             const [changePasswordError, setChangePasswordError] = React.useState('');
             const [adminPasswordInput, setAdminPasswordInput] = React.useState('');
+            const [adminEmailInput, setAdminEmailInput] = React.useState('');
+            const [authUser, setAuthUser] = React.useState(null);
+            const [authClaims, setAuthClaims] = React.useState({});
             const [adminPassError, setAdminPassError] = React.useState('');
             const [selectedMonth, setSelectedMonth] = React.useState(currentYearMonth);
             const [analyticsViewMode, setAnalyticsViewMode] = React.useState('DRIVER'); // 'DRIVER', 'BANK', 'TIMELINE'
@@ -2496,40 +2505,52 @@
             const [toast, setToast] = React.useState(null);
             const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
 
-            const DEFAULT_ADMIN_PASSWORD_HASH = '3616b7291853d3c5e0f022afd87dea74e392770899a0e67b172f9c1227794612';
-            const hashAdminPassword = async (value) => {
-                if (!window.crypto?.subtle) throw new Error('Browser tidak mendukung enkripsi password. Gunakan Chrome/Edge terbaru.');
-                const bytes = new TextEncoder().encode(String(value));
-                const digest = await window.crypto.subtle.digest('SHA-256', bytes);
-                return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, '0')).join('');
-            };
             React.useEffect(() => {
-                let cancelled = false;
-                (async () => {
+                let creatingAnonymousSession = false;
+                const unsubscribe = window.rekaptollAuth.onIdTokenChanged(async user => {
+                    if (!user) {
+                        setAuthUser(null);
+                        setAuthClaims({});
+                        setIsAdminMode(false);
+                        // Pengguna umum otomatis mendapat sesi Firebase Anonymous.
+                        if (!creatingAnonymousSession) {
+                            creatingAnonymousSession = true;
+                            try {
+                                await window.rekaptollAuth.signInAnonymously();
+                            } catch (err) {
+                                console.error('[Auth] Gagal membuat sesi anonymous:', err);
+                                setSyncStatus({ state: 'error', msg: 'Gagal memulai sesi pengguna. Periksa konfigurasi Anonymous Authentication.' });
+                            } finally {
+                                creatingAnonymousSession = false;
+                            }
+                        }
+                        return;
+                    }
+                    setAuthUser(user);
                     try {
-                        if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi');
-                        const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
-                        const response = await fetch(url, { cache: 'no-store' });
-                        if (!response.ok) throw new Error(`Firebase HTTP ${response.status}`);
-                        const value = await response.json();
-                        if (!cancelled) setAdminPasswordHash(typeof value === 'string' && value ? value : DEFAULT_ADMIN_PASSWORD_HASH);
+                        const result = await user.getIdTokenResult();
+                        const claims = result.claims || {};
+                        setAuthClaims(claims);
+                        setIsAdminMode(user.isAnonymous !== true && claims.admin === true);
                     } catch (err) {
-                        if (!cancelled) setAdminPasswordHash(DEFAULT_ADMIN_PASSWORD_HASH);
-                        console.warn('Admin password setting load:', err.message);
+                        console.error('[Auth] Gagal membaca custom claims:', err);
+                        setAuthClaims({});
+                        setIsAdminMode(false);
                     }
-                })();
-                return () => { cancelled = true; };
-            }, [firebaseProjectId]);
+                });
+                return unsubscribe;
+            }, []);
 
-            const openAdminLogin = () => {
-                if (isAdminMode) {
+            const openAdminLogin = async () => {
+                // Sesi anonymous tetap dipertahankan saat membuka formulir login admin.
+                if (authUser && authUser.isAnonymous !== true) {
+                    await window.rekaptollAuth.signOut();
                     setIsAdminMode(false);
-                    if (['monthly_recap', 'cloud_config', 'master_data'].includes(activeTab)) {
-                        setActiveTab('dashboard');
-                    }
-                    showToastNotification('Mode Admin dinonaktifkan.', 'info');
+                    if (['monthly_recap', 'cloud_config', 'master_data'].includes(activeTab)) setActiveTab('dashboard');
+                    showToastNotification('Keluar dari akun RekapToll.', 'info');
                     return;
                 }
+                setAdminEmailInput('');
                 setAdminPasswordInput('');
                 setAdminPassError('');
                 setShowAdminLogin(true);
@@ -2537,52 +2558,30 @@
 
             const confirmAdminLogin = async () => {
                 try {
-                    const expectedHash = adminPasswordHash || DEFAULT_ADMIN_PASSWORD_HASH;
-                    const suppliedHash = await hashAdminPassword(adminPasswordInput);
-                    if (suppliedHash !== expectedHash) {
-                        setAdminPassError('Password admin salah! Harap periksa kembali.');
-                        return;
+                    if (!adminEmailInput.trim() || !adminPasswordInput) throw new Error('Email dan password wajib diisi.');
+                    const credential = await window.rekaptollAuth.signInWithEmailAndPassword(adminEmailInput.trim(), adminPasswordInput);
+                    const tokenResult = await credential.user.getIdTokenResult(true);
+                    const claims = tokenResult.claims || {};
+                    setAuthClaims(claims);
+                    setAuthUser(credential.user);
+                    if (credential.user.isAnonymous === true || (claims.admin !== true && claims.reader !== true)) {
+                        await window.rekaptollAuth.signOut();
+                        throw new Error('Akun belum memiliki hak akses admin atau reader.');
                     }
-                    setIsAdminMode(true);
+                    setIsAdminMode(claims.admin === true);
                     setShowAdminLogin(false);
                     setAdminPasswordInput('');
+                    setAdminEmailInput('');
                     setAdminPassError('');
-                    showToastNotification('Mode Admin aktif. Pengelolaan Deposit Kasbon telah dibuka.', 'success');
+                    showToastNotification(claims.admin === true ? 'Login admin berhasil.' : 'Login reader berhasil (akses baca saja).', 'success');
                 } catch (err) {
-                    setAdminPassError(err.message || 'Gagal memeriksa password admin.');
+                    setAdminPassError(err.message || 'Login Firebase gagal.');
                 }
             };
 
             const saveAdminPasswordChange = async () => {
-                try {
-                    if (!isAdminMode) throw new Error('Aktifkan Mode Admin terlebih dahulu.');
-                    if (!currentAdminPassword || !newAdminPassword || newAdminPassword.length < 8)
-                        throw new Error('Password baru wajib minimal 8 karakter.');
-                    if (newAdminPassword !== confirmNewAdminPassword)
-                        throw new Error('Konfirmasi password baru tidak sama.');
-                    const currentHash = await hashAdminPassword(currentAdminPassword);
-                    if (currentHash !== (adminPasswordHash || DEFAULT_ADMIN_PASSWORD_HASH))
-                        throw new Error('Password admin saat ini salah.');
-                    const nextHash = await hashAdminPassword(newAdminPassword);
-                    if (!firebaseProjectId) throw new Error('Firebase belum dikonfigurasi; password tidak disimpan.');
-                    const url = `https://${firebaseProjectId.trim()}-default-rtdb.asia-southeast1.firebasedatabase.app/adminSettings/rekaptollPasswordHash.json`;
-                    const response = await fetch(url, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(nextHash),
-                        cache: 'no-store'
-                    });
-                    if (!response.ok) throw new Error(`Gagal menyimpan password ke Firebase (HTTP ${response.status}).`);
-                    setAdminPasswordHash(nextHash);
-                    setCurrentAdminPassword('');
-                    setNewAdminPassword('');
-                    setConfirmNewAdminPassword('');
-                    setChangePasswordError('');
-                    setShowChangeAdminPassword(false);
-                    showToastNotification('Password Admin berhasil diganti dan disimpan di Firebase.', 'success');
-                } catch (err) {
-                    setChangePasswordError(err.message || 'Gagal mengganti password.');
-                }
+                showToastNotification('Password dikelola melalui Firebase Authentication, bukan hash di database.', 'info');
+                setShowChangeAdminPassword(false);
             };
 
             const handleAdminTab = (tab) => {
@@ -2666,6 +2665,11 @@
             };
 
             const pushToCloud = async (path, data) => {
+                // Pengguna Anonymous hanya memiliki akses baca. Semua penulisan dari dashboard wajib melalui sesi Admin.
+                if (!isAdminMode) {
+                    setSyncStatus({ state: 'error', msg: 'Akses tulis ditolak: login Admin diperlukan.' });
+                    return false;
+                }
                 if (!firebaseProjectId) {
                     setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
                     return false;
@@ -2701,7 +2705,7 @@
 
             // Perbaikan Bug 2: Jangan sinkronkan kartu yang sudah sengaja dihapus
             React.useEffect(() => {
-                if (!transactions || transactions.length === 0) return;
+                if (!isAdminMode || !transactions || transactions.length === 0) return;
                 let addedAny = false;
                 const existingCleanNums = new Set(cards.map(c => (c.number || '').replace(/\D/g, '')));
                 const deletedSet = new Set(deletedCardNumbers);
@@ -2748,7 +2752,7 @@
                         return updated;
                     });
                 }
-            }, [transactions, deletedCardNumbers, cards]);
+            }, [isAdminMode, transactions, deletedCardNumbers, cards]);
 
             const fetchCloudData = React.useCallback(async (pidOverride = null, monthOverride = null) => {
                 const targetPid = String(pidOverride !== null ? pidOverride : firebaseProjectId).trim();
@@ -2890,7 +2894,7 @@
                 };
                 discoverCloudMonths();
                 return () => { cancelled = true; };
-            }, [firebaseProjectId]);
+            }, [firebaseProjectId, authUser]);
 
             // Hemat kuota: ambil data saat aplikasi dibuka atau saat bulan/proyek berubah.
             // Tidak memakai polling maupun EventSource permanen. Perubahan dari perangkat lain
@@ -2899,7 +2903,7 @@
                 const targetPid = (firebaseProjectId || '').trim();
                 if (!targetPid) return;
                 fetchCloudData(null, selectedMonth);
-            }, [firebaseProjectId, selectedMonth, fetchCloudData]);
+            }, [firebaseProjectId, selectedMonth, fetchCloudData, authUser]);
 
             React.useEffect(() => { safeStorageSet('etoll_cards', JSON.stringify(cards)); }, [cards]);
             React.useEffect(() => { safeStorageSet('etoll_deleted_cards', JSON.stringify(deletedCardNumbers)); }, [deletedCardNumbers]);
@@ -3307,21 +3311,30 @@
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="block text-[11px] font-bold text-slate-300">Password Administrator</label>
+                                    <label className="block text-[11px] font-bold text-slate-300">Email Akun Firebase</label>
+                                    <input
+                                        type="email"
+                                        value={adminEmailInput}
+                                        onChange={e => { setAdminEmailInput(e.target.value); setAdminPassError(''); }}
+                                        placeholder="email admin..."
+                                        className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-sm focus:ring-2 focus:ring-amber-500"
+                                        autoFocus
+                                    />
+                                    <label className="block text-[11px] font-bold text-slate-300">Password Firebase</label>
                                     <input
                                         type="password"
                                         value={adminPasswordInput}
                                         onChange={e => { setAdminPasswordInput(e.target.value); setAdminPassError(''); }}
                                         onKeyDown={e => { if (e.key === 'Enter') confirmAdminLogin(); }}
-                                        placeholder="Masukkan password admin..."
+                                        placeholder="Masukkan password akun Firebase..."
                                         className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-white font-mono text-sm focus:ring-2 focus:ring-amber-500"
                                         autoFocus
                                     />
                                     {adminPassError && <p className="text-rose-400 text-[11px] font-bold"><i className="fa-solid fa-circle-exclamation mr-1"></i>{adminPassError}</p>}
                                 </div>
                                 <div className="flex gap-2">
-                                    <button onClick={() => { setShowAdminLogin(false); setAdminPasswordInput(''); setAdminPassError(''); }} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
-                                    <button onClick={confirmAdminLogin} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"><i className="fa-solid fa-unlock mr-1"></i>Masuk Admin</button>
+                                    <button onClick={() => { setShowAdminLogin(false); setAdminPasswordInput(''); setAdminEmailInput(''); setAdminPassError(''); }} className="flex-1 py-2.5 border border-slate-700 rounded-xl text-xs font-bold text-slate-300 hover:bg-slate-800">Batal</button>
+                                    <button onClick={confirmAdminLogin} className="flex-1 py-2.5 bg-amber-600 hover:bg-amber-500 text-white rounded-xl text-xs font-bold shadow-lg"><i className="fa-solid fa-unlock mr-1"></i>Masuk</button>
                                 </div>
                             </div>
                         </div>
@@ -4331,6 +4344,7 @@
 
                         {activeTab === 'master_data' && (
                             <MasterDataTab 
+                                isAdminMode={isAdminMode} 
                                 cards={cards} 
                                 setCards={setCards} 
                                 transactions={transactions} 
