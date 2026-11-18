@@ -2394,7 +2394,7 @@
             const [transactions, setTransactions] = React.useState([]);
 
             // Konfigurasi Firebase ditanam langsung pada aplikasi; tidak membaca ID dari halaman atau localStorage.
-            const FIREBASE_PROJECT_ID = 'etoll-3366c';
+            const FIREBASE_PROJECT_ID = 'rekaptoll-production';
             const [firebaseProjectId] = React.useState(FIREBASE_PROJECT_ID);
             const [cloudMonthKeys, setCloudMonthKeys] = React.useState([]);
             const [geminiApiKey, setGeminiApiKey] = React.useState(() => safeStorageGet('etoll_gemini_key') || '');
@@ -4289,8 +4289,8 @@
                                     <div className="space-y-1.5">
                                         <label className="block text-slate-300 font-bold">Firebase Realtime Database — tertanam di aplikasi:</label>
                                         <div className="w-full p-3 rounded-xl border border-emerald-700/60 bg-emerald-950/30 text-emerald-200 font-mono text-sm break-all">
-                                            Project ID: etoll-3366c<br />
-                                            URL: https://etoll-3366c-default-rtdb.asia-southeast1.firebasedatabase.app
+                                            Project ID: rekaptoll-production<br />
+                                            URL: https://rekaptoll-production-default-rtdb.asia-southeast1.firebasedatabase.app
                                         </div>
                                         <p className="text-[11px] text-slate-400">Tidak perlu mengisi Project ID di halaman muka atau menyimpannya secara manual. Aplikasi langsung memakai database ini.</p>
                                     </div>
