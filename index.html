@@ -2681,7 +2681,7 @@
 
             const pushToCloud = async (path, data) => {
                 const safePath = String(path || '').replace(/^\/+|\/+$/g, '');
-                if (!safePath || safePath.split('/').some(part => !part || /[.#$\\[\\]]/.test(part))) {
+                if (!safePath || safePath.split('/').some(part => !part || /[.#$\[\]]/.test(part))) {
                     throw new Error('Path Firebase tidak valid; penulisan dibatalkan.');
                 }
                 if (!firebaseProjectId) {
