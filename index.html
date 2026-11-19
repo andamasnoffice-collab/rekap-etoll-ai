@@ -497,7 +497,7 @@
     </script>
 
     <script type="text/babel">
-        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud }) {
+        function MasterDataTab({ cards, setCards, transactions, setTransactions, setMonthlyDeposits, firebaseProjectId, fetchCloudData, showToastNotification, handleAddCard, deletedCardNumbers, setDeletedCardNumbers, pushToCloud, isAdminMode }) {
             const [securityModal, setSecurityModal] = React.useState(null);
             const [passwordInput, setPasswordInput] = React.useState('');
             const [passError, setPassError] = React.useState('');
@@ -623,6 +623,7 @@
             };
 
             const handleConfirmAction = async () => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk menghapus kartu.', 'error'); return; }
                 console.info('[Kartu] Tombol Konfirmasi diklik');
                 showToastNotification('Memproses konfirmasi…', 'info');
                 if (!securityModal) return;
@@ -642,7 +643,12 @@
                         setSecurityModal(null); setPasswordInput(''); setPassError('');
                         return;
                     }
-                    // Pertahankan alur metode yang berhasil: perbarui UI/cache, lalu tulis /cards.
+                    const saved = await pushToCloud('cards', updatedCards);
+                    if (saved !== true) {
+                        showToastNotification('Penghapusan kartu gagal dikonfirmasi Firebase. Data lama dipertahankan.', 'error');
+                        setSecurityModal(null); setPasswordInput(''); setPassError('');
+                        return;
+                    }
                     setCards(updatedCards);
                     if (cleanNum) {
                         const newDeleted = [...new Set([...deletedCardNumbers, cleanNum])];
@@ -650,17 +656,7 @@
                         safeStorageSet('etoll_deleted_cards', JSON.stringify(newDeleted));
                     }
                     safeStorageSet('etoll_cards', JSON.stringify(updatedCards));
-                    try {
-                        const saved = await pushToCloud('cards', updatedCards);
-                        if (saved === false) {
-                            showToastNotification('Kartu dihapus pada perangkat ini, tetapi Firebase gagal menyimpan. Periksa koneksi/sinkronisasi.', 'error');
-                        } else {
-                            showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
-                        }
-                    } catch (err) {
-                        console.error('[Kartu] Gagal mengirim penghapusan ke Firebase:', err);
-                        showToastNotification('Kartu dihapus pada perangkat ini, tetapi gagal dikirim ke Firebase.', 'error');
-                    }
+                    showToastNotification(`Kartu (${payload.number}) berhasil dihapus dan dikonfirmasi Firebase.`, 'success');
 
                 }
 
@@ -671,6 +667,7 @@
 
             const handleCreateCardManual = (e) => {
                 e.preventDefault();
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk menambah kartu.', 'error'); return; }
                 if (!newCardData.number || newCardData.number.replace(/\D/g, '').length < 16) {
                     showToastNotification('Nomor kartu harus 16 digit.', 'error');
                     return;
@@ -682,64 +679,46 @@
                 }
             };
 
-            const handleSaveEditCard = (e) => {
+            const handleSaveEditCard = async (e) => {
                 e.preventDefault();
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk mengedit kartu.', 'error'); return; }
                 if (!editingCard) return;
-
-                const cleanNewNum = (editingCard.number || '').replace(/\D/g, '');
-                if (!cleanNewNum) {
-                    showToastNotification('Nomor e-Toll tidak boleh kosong.', 'error');
+                const cleanNewNum = String(editingCard.number || '').replace(/\D/g, '');
+                if (cleanNewNum.length !== 16) { showToastNotification('Nomor e-Toll harus 16 digit.', 'error'); return; }
+                const originalCard = cards.find(c => String(c.id) === String(editingCard.id));
+                if (!originalCard) { showToastNotification('Kartu tidak ditemukan. Segarkan data lalu coba lagi.', 'error'); return; }
+                if (cards.some(c => String(c.id) !== String(editingCard.id) && String(c.number || '').replace(/\D/g, '') === cleanNewNum)) { showToastNotification('Nomor kartu tersebut sudah terdaftar.', 'error'); return; }
+                const oldCleanNum = String(originalCard.number || '').replace(/\D/g, '');
+                const detected = detectBankFromCardNumber(editingCard.number, originalCard.label || '');
+                const updatedCardObj = { ...originalCard, number: formatCardNumber(editingCard.number), bank: editingCard.bank || detected.bank, color: detected.color };
+                const updatedCards = cards.map(c => String(c.id) === String(editingCard.id) ? updatedCardObj : c);
+                const linkedTxs = updateLinkedTxs && oldCleanNum ? transactions.filter(t => String(t.etollNumber || '').replace(/\D/g, '') === oldCleanNum) : [];
+                const txUpdates = linkedTxs.map(t => ({ ...t, etollNumber: updatedCardObj.number, merchant: t.merchant === originalCard.label ? updatedCardObj.label : t.merchant }));
+                const txResults = await Promise.all(txUpdates.map(t => {
+                    const monthKey = String(t.date || '').slice(0, 7);
+                    if (!/^\d{4}-\d{2}$/.test(monthKey) || !t.id) return Promise.resolve(false);
+                    return pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t);
+                }));
+                if (txResults.some(ok => ok !== true)) {
+                    await Promise.all(linkedTxs.map(t => {
+                        const monthKey = String(t.date || '').slice(0, 7);
+                        return /^\d{4}-\d{2}$/.test(monthKey) && t.id ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t) : Promise.resolve(false);
+                    }));
+                    showToastNotification('Edit kartu dibatalkan karena riwayat transaksi gagal disimpan. Data transaksi sebelumnya dipulihkan.', 'error');
                     return;
                 }
-
-                const originalCard = cards.find(c => c.id === editingCard.id);
-                const oldCleanNum = originalCard ? (originalCard.number || '').replace(/\D/g, '') : '';
-                const detected = detectBankFromCardNumber(editingCard.number, originalCard?.label || '');
-
-                const updatedCardObj = {
-                    ...originalCard,
-                    number: formatCardNumber(editingCard.number),
-                    // Driver dan nopol hanya diubah melalui dropdown penghubung pada bagian atas.
-                    label: originalCard?.label || '',
-                    nopol: originalCard?.nopol || '',
-                    bank: editingCard.bank || detected.bank,
-                    color: detected.color
-                };
-
-                const updatedCards = cards.map(c => c.id === editingCard.id ? updatedCardObj : c);
-                setCards(updatedCards);
-                pushToCloud('cards', updatedCards);
-
-                // Sinkronkan nama dan nomor kartu ke transaksi yang sudah ada bila opsi dipilih
-                if (updateLinkedTxs && oldCleanNum) {
-                    let hasTxChanges = false;
-                    const updatedTxs = transactions.map(t => {
-                        const txClean = (t.etollNumber || '').replace(/\D/g, '');
-                        if (txClean === oldCleanNum) {
-                            hasTxChanges = true;
-                            return {
-                                ...t,
-                                etollNumber: updatedCardObj.number,
-                                merchant: (originalCard && t.merchant === originalCard.label) ? updatedCardObj.label : t.merchant
-                            };
-                        }
-                        return t;
-                    });
-
-                    if (hasTxChanges) {
-                        setTransactions(updatedTxs);
-                        safeStorageSet('etoll_transactions', JSON.stringify(updatedTxs));
-                        Promise.all(updatedTxs.map(t => {
-                            const monthKey = String(t.date || '').slice(0, 7);
-                            return monthKey
-                                ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t)
-                                : Promise.resolve(false);
-                        }));
-                    }
+                if (await pushToCloud('cards', updatedCards) !== true) {
+                    await Promise.all(linkedTxs.map(t => {
+                        const monthKey = String(t.date || '').slice(0, 7);
+                        return /^\d{4}-\d{2}$/.test(monthKey) && t.id ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t) : Promise.resolve(false);
+                    }));
+                    showToastNotification('Edit kartu gagal dikonfirmasi Firebase. Data kartu dan transaksi dipulihkan.', 'error');
+                    return;
                 }
-
+                setCards(updatedCards); safeStorageSet('etoll_cards', JSON.stringify(updatedCards));
+                if (txUpdates.length) { const changed = new Map(txUpdates.map(t => [String(t.id), t])); setTransactions(transactions.map(t => changed.get(String(t.id)) || t)); }
                 setEditingCard(null);
-                showToastNotification('Data kartu berhasil diperbarui!');
+                showToastNotification('Data kartu berhasil disimpan dan dikonfirmasi Firebase.', 'success');
             };
 
             const normalizeMasterNames = values => [...new Set((Array.isArray(values) ? values : []).map(v => String(v || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'id'));
@@ -778,16 +757,17 @@
             }, [firebaseProjectId]);
 
             const saveMasterList = async (kind, values) => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk mengubah master data.', 'error'); return false; }
                 const key = kind === 'driver' ? 'etoll_master_drivers' : 'etoll_master_vehicles';
                 const path = kind === 'driver' ? 'masterDrivers' : 'masterVehicles';
                 const normalized = normalizeMasterNames(values);
-                safeStorageSet(key, JSON.stringify(normalized));
+                if (!firebaseProjectId) { showToastNotification('Firebase belum dikonfigurasi; master data tidak diubah.', 'error'); return false; }
+                const saved = await pushToCloud(path, normalized);
+                if (saved !== true) { showToastNotification('Master data gagal disimpan ke Firebase. Data lokal dipertahankan.', 'error'); return false; }
                 if (kind === 'driver') setMasterDrivers(normalized); else setMasterVehicles(normalized);
-                if (firebaseProjectId) {
-                    const saved = await pushToCloud(path, normalized);
-                    if (saved === false) showToastNotification('Daftar tersimpan di perangkat ini, tetapi gagal disimpan ke Firebase.', 'error');
-                    else showToastNotification(kind === 'driver' ? 'Master driver berhasil disimpan.' : 'Master kendaraan berhasil disimpan.', 'success');
-                } else showToastNotification('Daftar tersimpan di perangkat ini. Isi ID Firebase untuk sinkronisasi cloud.', 'info');
+                safeStorageSet(key, JSON.stringify(normalized));
+                showToastNotification(kind === 'driver' ? 'Master driver berhasil disimpan di Firebase.' : 'Master kendaraan berhasil disimpan di Firebase.', 'success');
+                return true;
             };
             const addMasterDriver = async e => {
                 e.preventDefault();
@@ -808,28 +788,29 @@
 
             // CRUD master driver dan kendaraan. Perubahan nama/plat ikut memperbarui relasi kartu.
             const editMasterItem = async (kind, current) => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk mengedit master data.', 'error'); return; }
                 const nextValue = window.prompt(kind === 'driver' ? 'Nama driver baru:' : 'Nomor polisi baru:', current);
                 if (nextValue === null) return;
                 const clean = kind === 'vehicle' ? nextValue.trim().toUpperCase().replace(/\s+/g, ' ') : nextValue.trim();
                 if (!clean) { showToastNotification('Nilai master tidak boleh kosong.', 'error'); return; }
-                if (source.some(v => v.toLowerCase() === clean.toLowerCase() && v !== current)) { showToastNotification('Data dengan nama/nopol tersebut sudah ada.', 'error'); return; }
                 const list = kind === 'driver' ? masterDrivers : masterVehicles;
-                await saveMasterList(kind, list.map(v => v === current ? clean : v));
-                const updated = cards.map(c => kind === 'driver' ? (c.label === current ? {...c, label:clean} : c) : (String(c.nopol || '').toUpperCase() === current.toUpperCase() ? {...c, nopol:clean} : c));
-                if (JSON.stringify(updated) !== JSON.stringify(cards)) {
-                    setCards(updated); safeStorageSet('etoll_cards', JSON.stringify(updated));
-                    const saved = await pushToCloud('cards', updated);
-                    if (saved === false) showToastNotification('Master berubah, tetapi pembaruan relasi kartu gagal dikirim ke Firebase.', 'error');
-                }
+                if (list.some(v => v.toLowerCase() === clean.toLowerCase() && v !== current)) { showToastNotification('Data dengan nama/nopol tersebut sudah ada.', 'error'); return; }
+                const updatedCards = cards.map(c => kind === 'driver' ? (c.label === current ? {...c, label:clean} : c) : (String(c.nopol || '').toUpperCase() === current.toUpperCase() ? {...c, nopol:clean} : c));
+                if (JSON.stringify(updatedCards) !== JSON.stringify(cards) && await pushToCloud('cards', updatedCards) !== true) { showToastNotification('Relasi kartu gagal disimpan; master tidak diubah.', 'error'); return; }
+                const listWithCurrent = list.includes(current) ? list : [...list, current];
+                const saved = await saveMasterList(kind, listWithCurrent.map(v => v === current ? clean : v));
+                if (saved !== true) { if (JSON.stringify(updatedCards) !== JSON.stringify(cards)) await pushToCloud('cards', cards); return; }
+                if (JSON.stringify(updatedCards) !== JSON.stringify(cards)) { setCards(updatedCards); safeStorageSet('etoll_cards', JSON.stringify(updatedCards)); }
                 showToastNotification('Master berhasil diperbarui. Relasi kartu ikut disesuaikan.', 'success');
             };
             const deleteMasterItem = async (kind, current) => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk menghapus master data.', 'error'); return; }
                 const linked = cards.some(c => kind === 'driver' ? String(c.label || '').toLowerCase() === current.toLowerCase() : String(c.nopol || '').toUpperCase() === current.toUpperCase());
                 if (linked) { showToastNotification('Tidak dapat menghapus: data masih terhubung ke kartu. Ubah hubungan kartu pada bagian pengaturan di atas terlebih dahulu.', 'error'); return; }
                 if (!window.confirm(`Hapus ${kind === 'driver' ? 'driver' : 'nopol'} ${current} dari master?`)) return;
                 const list = kind === 'driver' ? masterDrivers : masterVehicles;
-                await saveMasterList(kind, list.filter(v => v !== current));
-                showToastNotification('Data master berhasil dihapus.', 'success');
+                const saved = await saveMasterList(kind, list.filter(v => v !== current));
+                if (saved === true) showToastNotification('Data master berhasil dihapus.', 'success');
             };
 
             const normalizePlate = value => String(value || '').trim().toUpperCase().replace(/\s+/g, ' ');
@@ -846,7 +827,8 @@
                 });
             };
 
-            const saveCardAssignment = (cardId, field, value) => {
+            const saveCardAssignment = async (cardId, field, value) => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk mengubah pasangan kartu.', 'error'); return false; }
                 if (field === 'nopol' && value) {
                     const selectedPlate = normalizePlate(value);
                     const alreadyAssigned = cards.some(card => card.id !== cardId && normalizePlate(card.nopol) === selectedPlate);
@@ -855,14 +837,19 @@
                         return;
                     }
                 }
+                const previousCards = cards;
                 const updated = cards.map(card => card.id === cardId
                     ? { ...card, [field]: field === 'nopol' ? normalizePlate(value) : value }
                     : card);
                 setCards(updated);
-                safeStorageSet('etoll_cards', JSON.stringify(updated));
-                Promise.resolve(pushToCloud('cards', updated)).then(saved => {
-                    if (saved === false) showToastNotification('Perubahan tersimpan lokal, tetapi gagal dikirim ke Firebase.', 'error');
-                }).catch(err => showToastNotification(`Gagal menyimpan perubahan: ${err.message || err}`, 'error'));
+                const saved = await pushToCloud('cards', updated);
+                if (saved !== true) {
+                    setCards(previousCards);
+                    showToastNotification('Perubahan kartu belum dikonfirmasi Firebase; data lokal dipulihkan.', 'error');
+                    return false;
+                }
+                showToastNotification('Perubahan kartu berhasil disimpan di Firebase.', 'success');
+                return true;
             };
 
             return (
@@ -2378,6 +2365,15 @@
     </script>
 
     <script type="text/babel">
+        window.__REKAPTOLL_DIAGNOSTICS__ = Object.freeze({
+            app: 'rekap-etoll-ai',
+            schema: 'transactionsByMonth',
+            database: 'rekaptoll-production',
+            duplicateInvoiceScope: 'current-calendar-month',
+            transactionalWrites: 'telegram-only',
+            version: 'audit-fix-2026-11'
+        });
+
         function App() {
             // Master kartu resmi dimuat dari Firebase, bukan daftar/cache bawaan browser.
             const [cards, setCards] = React.useState([]);
@@ -2666,6 +2662,10 @@
             };
 
             const pushToCloud = async (path, data) => {
+                const safePath = String(path || '').replace(/^\/+|\/+$/g, '');
+                if (!safePath || safePath.split('/').some(part => !part || /[.#$\[\]]/.test(part))) {
+                    throw new Error('Path Firebase tidak valid; penulisan dibatalkan.');
+                }
                 if (!firebaseProjectId) {
                     setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
                     return false;
@@ -2674,7 +2674,7 @@
                     const targetPid = firebaseProjectId.trim();
                     // Jangan membatalkan PUT dengan AbortController: pada beberapa koneksi
                     // browser lokal, request dibatalkan sebelum Firebase mengembalikan respons.
-                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`;
+                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${safePath}.json`;
                     console.info('[Firebase] Menyimpan', path);
                     const response = await fetch(url, {
                         method: 'PUT',
@@ -2687,8 +2687,10 @@
                         try { detail = await response.text(); } catch (_) {}
                         throw new Error(`Firebase HTTP ${response.status}${detail ? ': ' + detail.slice(0,180) : ''}`);
                     }
+                    const confirmed = await response.json();
+                    if (confirmed === undefined) throw new Error('Firebase tidak memberikan konfirmasi respons.');
                     setSyncStatus({ state: 'success', msg: 'Tersimpan di Firebase' });
-                    console.info('[Firebase] Berhasil menyimpan', path);
+                    console.info('[Firebase] Berhasil menyimpan', safePath);
                     return true;
                 } catch (e) {
                     console.error('Cloud push failed for', path, e);
@@ -2915,10 +2917,21 @@
                 setTimeout(() => setToast(null), 4000);
             };
 
-            const handleUpdateSpjProfile = (newProfile) => {
+            const handleUpdateSpjProfile = async (newProfile) => {
+                if (!newProfile || typeof newProfile !== 'object' || Array.isArray(newProfile)) {
+                    showToastNotification('Profil SPJ tidak valid dan tidak disimpan.', 'error');
+                    return false;
+                }
+                const previousProfile = spjProfile;
                 setSpjProfile(newProfile);
-                pushToCloud('spjProfile', newProfile);
-                showToastNotification('Profil SPJ & Pejabat berhasil diperbarui & disimpan ke Cloud!');
+                const saved = await pushToCloud('spjProfile', newProfile);
+                if (saved !== true) {
+                    setSpjProfile(previousProfile);
+                    showToastNotification('Profil SPJ belum terkonfirmasi Firebase; perubahan lokal dibatalkan.', 'error');
+                    return false;
+                }
+                showToastNotification('Profil SPJ berhasil disimpan dan dikonfirmasi Firebase.', 'success');
+                return true;
             };
 
             const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
@@ -2927,7 +2940,12 @@
                 // Pemeriksaan UI dibatasi ke bulan kalender berjalan; worker tetap menjadi validasi utama.
                 const now = new Date();
                 const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                return transactions.some(t => t.id !== excludeId && String(t.date || '').slice(0, 7) === monthKey && t.invoiceNumber && String(t.invoiceNumber).trim().toUpperCase() === clean);
+                return transactions.some(t => {
+                    const date = String(t.date || '').slice(0, 10);
+                    const invoice = String(t.invoiceNumber || '').trim().toUpperCase();
+                    return String(t.id) !== String(excludeId) && date.slice(0, 7) === monthKey &&
+                        /^\d{4}-\d{2}-\d{2}$/.test(date) && invoice === clean;
+                });
             };
 
             const handleAddCard = (newCardData) => {
@@ -2954,8 +2972,17 @@
                 };
                 const updated = [...cards, newCard];
                 setCards(updated);
-                pushToCloud('cards', updated);
-                showToastNotification(`Kartu baru (${formattedNum}) berhasil ditambahkan.`);
+                pushToCloud('cards', updated).then(saved => {
+                    if (saved !== true) {
+                        setCards(previous => previous.filter(card => card.id !== newCard.id));
+                        showToastNotification('Kartu belum tersimpan di Firebase; perubahan lokal dibatalkan.', 'error');
+                    } else {
+                        showToastNotification(`Kartu baru (${formattedNum}) berhasil disimpan di Firebase.`, 'success');
+                    }
+                }).catch(error => {
+                    setCards(previous => previous.filter(card => card.id !== newCard.id));
+                    showToastNotification(`Gagal menyimpan kartu: ${error.message || error}`, 'error');
+                });
                 return newCard;
             };
 
@@ -4343,6 +4370,7 @@
                                 deletedCardNumbers={deletedCardNumbers} 
                                 setDeletedCardNumbers={setDeletedCardNumbers} 
                                 pushToCloud={pushToCloud}
+                                isAdminMode={isAdminMode}
                             />
                         )}
                     </main>
