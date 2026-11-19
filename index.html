@@ -63,7 +63,30 @@
       };
       if (!firebase.apps.length) firebase.initializeApp(REKAPTOLL_FIREBASE_CONFIG);
       window.rekaptollAuth = firebase.auth();
-      window.rekaptollAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+      // Tunggu Firebase memulihkan sesi tersimpan atau membuat sesi anonymous
+      // sebelum request RTDB pertama dijalankan.
+      window.rekaptollAuthReady = (async () => {
+        await window.rekaptollAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+        if (window.rekaptollAuth.currentUser) return window.rekaptollAuth.currentUser;
+        return await new Promise((resolve, reject) => {
+          let unsubscribe = () => {};
+          unsubscribe = window.rekaptollAuth.onAuthStateChanged(async user => {
+            if (user) {
+              unsubscribe();
+              resolve(user);
+              return;
+            }
+            try {
+              const credential = await window.rekaptollAuth.signInAnonymously();
+              unsubscribe();
+              resolve(credential.user);
+            } catch (error) {
+              unsubscribe();
+              reject(error);
+            }
+          }, reject);
+        });
+      })();
       const rekaptollNativeFetch = window.fetch.bind(window);
       window.fetch = async (input, init = {}) => {
         const rawUrl = typeof input === 'string' ? input : input.url;
@@ -71,7 +94,8 @@
         try { parsed = new URL(rawUrl, window.location.href); } catch (_) { return rekaptollNativeFetch(input, init); }
         if (parsed.hostname !== 'rekaptoll-production-default-rtdb.asia-southeast1.firebasedatabase.app')
           return rekaptollNativeFetch(input, init);
-        const user = window.rekaptollAuth.currentUser;
+        const readyUser = await window.rekaptollAuthReady;
+        const user = window.rekaptollAuth.currentUser || readyUser;
         if (!user) return new Response(JSON.stringify({ error: 'AUTH_REQUIRED' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
         const token = await user.getIdToken();
         parsed.searchParams.set('auth', token);
@@ -2502,19 +2526,15 @@
             const [syncStatus, setSyncStatus] = React.useState({ state: 'idle', msg: 'Memulai koneksi...' });
 
             React.useEffect(() => {
-                let creatingAnonymousSession = false;
                 const unsubscribe = window.rekaptollAuth.onIdTokenChanged(async user => {
                     if (!user) {
                         setAuthUser(null);
                         setAuthClaims({});
                         setIsAdminMode(false);
-                        if (!creatingAnonymousSession) {
-                            creatingAnonymousSession = true;
-                            try { await window.rekaptollAuth.signInAnonymously(); }
-                            catch (err) {
-                                console.error('[Auth] Gagal membuat sesi anonymous:', err);
-                                setSyncStatus({ state: 'error', msg: 'Gagal memulai sesi pengguna. Periksa Anonymous Authentication.' });
-                            } finally { creatingAnonymousSession = false; }
+                        try { await window.rekaptollAuthReady; }
+                        catch (err) {
+                            console.error('[Auth] Gagal menyiapkan sesi Firebase:', err);
+                            setSyncStatus({ state: 'error', msg: 'Gagal memulai sesi pengguna. Periksa Firebase Authentication.' });
                         }
                         return;
                     }
