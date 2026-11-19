@@ -2041,7 +2041,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p className="invisible select-none" style={{ margin: 0 }}>&nbsp;</p>
                                                                 <p style={{ margin: 0 }}>Setuju/lunas dibayar</p>
-                                                                <p style={{ margin: 0 }}>Bendahara Pengeluaran Pembantu</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -2056,7 +2056,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p style={{ margin: 0 }}>{spjProfile.city || 'Surakarta'},</p>
                                                                 <p style={{ margin: 0 }}>a.n. Kuasa Pengguna Anggaran</p>
-                                                                <p style={{ margin: 0 }}>Pejabat Pembuat Komitmen</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -4154,7 +4154,7 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">1</span>
-                                                    <p className="font-bold text-amber-300">Penanggungjawab Pengemudi</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.applicantTitle || 'Penanggungjawab Pengemudi'}</p>
                                                  <div>
                                                      <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
                                                      <input
@@ -4192,7 +4192,7 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">2</span>
-                                                    <p className="font-bold text-amber-300">Kasubdit RT, TU dan Logistik</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.kasubditTitle || 'Kasubdit RT, TU dan Logistik'}</p>
                                                  <div>
                                                      <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
                                                      <input
@@ -4230,7 +4230,7 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">3</span>
-                                                    <p className="font-bold text-amber-300">Pejabat Pembuat Komitmen (PPK)</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen (PPK)'}</p>
                                                  <div>
                                                      <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
                                                      <input
@@ -4268,7 +4268,7 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">4</span>
-                                                    <p className="font-bold text-amber-300">Bendahara Pengeluaran Pembantu (BPP)</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu (BPP)'}</p>
                                                  <div>
                                                      <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
                                                      <input
