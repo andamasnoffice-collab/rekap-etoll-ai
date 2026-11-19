@@ -623,6 +623,7 @@
             };
 
             const handleConfirmAction = async () => {
+                if (!isAdminMode) { showToastNotification('Login Admin diperlukan untuk menghapus kartu.', 'error'); return; }
                 console.info('[Kartu] Tombol Konfirmasi diklik');
                 showToastNotification('Memproses konfirmasi…', 'info');
                 if (!securityModal) return;
@@ -642,7 +643,12 @@
                         setSecurityModal(null); setPasswordInput(''); setPassError('');
                         return;
                     }
-                    // Pertahankan alur metode yang berhasil: perbarui UI/cache, lalu tulis /cards.
+                    const saved = await pushToCloud('cards', updatedCards);
+                    if (saved !== true) {
+                        showToastNotification('Penghapusan kartu gagal dikonfirmasi Firebase. Data lama dipertahankan.', 'error');
+                        setSecurityModal(null); setPasswordInput(''); setPassError('');
+                        return;
+                    }
                     setCards(updatedCards);
                     if (cleanNum) {
                         const newDeleted = [...new Set([...deletedCardNumbers, cleanNum])];
@@ -650,17 +656,7 @@
                         safeStorageSet('etoll_deleted_cards', JSON.stringify(newDeleted));
                     }
                     safeStorageSet('etoll_cards', JSON.stringify(updatedCards));
-                    try {
-                        const saved = await pushToCloud('cards', updatedCards);
-                        if (saved === false) {
-                            showToastNotification('Kartu dihapus pada perangkat ini, tetapi Firebase gagal menyimpan. Periksa koneksi/sinkronisasi.', 'error');
-                        } else {
-                            showToastNotification(`Kartu (${payload.number}) berhasil dihapus.`);
-                        }
-                    } catch (err) {
-                        console.error('[Kartu] Gagal mengirim penghapusan ke Firebase:', err);
-                        showToastNotification('Kartu dihapus pada perangkat ini, tetapi gagal dikirim ke Firebase.', 'error');
-                    }
+                    showToastNotification(`Kartu (${payload.number}) berhasil dihapus dan dikonfirmasi Firebase.`, 'success');
 
                 }
 
@@ -791,7 +787,8 @@
                 if (list.some(v => v.toLowerCase() === clean.toLowerCase() && v !== current)) { showToastNotification('Data dengan nama/nopol tersebut sudah ada.', 'error'); return; }
                 const updatedCards = cards.map(c => kind === 'driver' ? (c.label === current ? {...c, label:clean} : c) : (String(c.nopol || '').toUpperCase() === current.toUpperCase() ? {...c, nopol:clean} : c));
                 if (JSON.stringify(updatedCards) !== JSON.stringify(cards) && await pushToCloud('cards', updatedCards) !== true) { showToastNotification('Relasi kartu gagal disimpan; master tidak diubah.', 'error'); return; }
-                const saved = await saveMasterList(kind, list.map(v => v === current ? clean : v));
+                const listWithCurrent = list.includes(current) ? list : [...list, current];
+                const saved = await saveMasterList(kind, listWithCurrent.map(v => v === current ? clean : v));
                 if (saved !== true) { if (JSON.stringify(updatedCards) !== JSON.stringify(cards)) await pushToCloud('cards', cards); return; }
                 if (JSON.stringify(updatedCards) !== JSON.stringify(cards)) { setCards(updatedCards); safeStorageSet('etoll_cards', JSON.stringify(updatedCards)); }
                 showToastNotification('Master berhasil diperbarui. Relasi kartu ikut disesuaikan.', 'success');
