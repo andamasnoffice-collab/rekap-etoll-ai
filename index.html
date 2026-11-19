@@ -2680,7 +2680,7 @@
             };
 
             const pushToCloud = async (path, data) => {
-                const safePath = String(path || '').replace(/^\\/+|\\/+/g, '');
+                const safePath = String(path || '').replace(/^\/+|\/+$/g, '');
                 if (!safePath || safePath.split('/').some(part => !part || /[.#$\\[\\]]/.test(part))) {
                     throw new Error('Path Firebase tidak valid; penulisan dibatalkan.');
                 }
@@ -2962,7 +2962,7 @@
                     const date = String(t.date || '').slice(0, 10);
                     const invoice = String(t.invoiceNumber || '').trim().toUpperCase();
                     return String(t.id) !== String(excludeId) && date.slice(0, 7) === monthKey &&
-                        /^\\d{4}-\\d{2}-\\d{2}$/.test(date) && invoice === clean;
+                        /^\d{4}-\d{2}-\d{2}$/.test(date) && invoice === clean;
                 });
             };
 
