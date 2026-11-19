@@ -692,17 +692,27 @@
                 const detected = detectBankFromCardNumber(editingCard.number, originalCard.label || '');
                 const updatedCardObj = { ...originalCard, number: formatCardNumber(editingCard.number), bank: editingCard.bank || detected.bank, color: detected.color };
                 const updatedCards = cards.map(c => String(c.id) === String(editingCard.id) ? updatedCardObj : c);
-                if (await pushToCloud('cards', updatedCards) !== true) { showToastNotification('Perubahan kartu gagal dikonfirmasi Firebase. Data lama dipertahankan.', 'error'); return; }
                 const linkedTxs = updateLinkedTxs && oldCleanNum ? transactions.filter(t => String(t.etollNumber || '').replace(/\D/g, '') === oldCleanNum) : [];
                 const txUpdates = linkedTxs.map(t => ({ ...t, etollNumber: updatedCardObj.number, merchant: t.merchant === originalCard.label ? updatedCardObj.label : t.merchant }));
-                const writeResults = await Promise.all(txUpdates.map(t => {
+                const txResults = await Promise.all(txUpdates.map(t => {
                     const monthKey = String(t.date || '').slice(0, 7);
                     if (!/^\d{4}-\d{2}$/.test(monthKey) || !t.id) return Promise.resolve(false);
                     return pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t);
                 }));
-                if (writeResults.some(ok => ok !== true)) {
-                    await pushToCloud('cards', cards);
-                    showToastNotification('Perubahan dibatalkan karena pembaruan riwayat transaksi gagal. Data kartu lama dipulihkan.', 'error');
+                if (txResults.some(ok => ok !== true)) {
+                    await Promise.all(linkedTxs.map(t => {
+                        const monthKey = String(t.date || '').slice(0, 7);
+                        return /^\d{4}-\d{2}$/.test(monthKey) && t.id ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t) : Promise.resolve(false);
+                    }));
+                    showToastNotification('Edit kartu dibatalkan karena riwayat transaksi gagal disimpan. Data transaksi sebelumnya dipulihkan.', 'error');
+                    return;
+                }
+                if (await pushToCloud('cards', updatedCards) !== true) {
+                    await Promise.all(linkedTxs.map(t => {
+                        const monthKey = String(t.date || '').slice(0, 7);
+                        return /^\d{4}-\d{2}$/.test(monthKey) && t.id ? pushToCloud(`transactionsByMonth/${monthKey}/${t.id}`, t) : Promise.resolve(false);
+                    }));
+                    showToastNotification('Edit kartu gagal dikonfirmasi Firebase. Data kartu dan transaksi dipulihkan.', 'error');
                     return;
                 }
                 setCards(updatedCards); safeStorageSet('etoll_cards', JSON.stringify(updatedCards));
