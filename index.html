@@ -846,7 +846,7 @@
                 });
             };
 
-            const saveCardAssignment = (cardId, field, value) => {
+            const saveCardAssignment = async (cardId, field, value) => {
                 if (field === 'nopol' && value) {
                     const selectedPlate = normalizePlate(value);
                     const alreadyAssigned = cards.some(card => card.id !== cardId && normalizePlate(card.nopol) === selectedPlate);
@@ -855,14 +855,19 @@
                         return;
                     }
                 }
+                const previousCards = cards;
                 const updated = cards.map(card => card.id === cardId
                     ? { ...card, [field]: field === 'nopol' ? normalizePlate(value) : value }
                     : card);
                 setCards(updated);
-                safeStorageSet('etoll_cards', JSON.stringify(updated));
-                Promise.resolve(pushToCloud('cards', updated)).then(saved => {
-                    if (saved === false) showToastNotification('Perubahan tersimpan lokal, tetapi gagal dikirim ke Firebase.', 'error');
-                }).catch(err => showToastNotification(`Gagal menyimpan perubahan: ${err.message || err}`, 'error'));
+                const saved = await pushToCloud('cards', updated);
+                if (saved !== true) {
+                    setCards(previousCards);
+                    showToastNotification('Perubahan kartu belum dikonfirmasi Firebase; data lokal dipulihkan.', 'error');
+                    return false;
+                }
+                showToastNotification('Perubahan kartu berhasil disimpan di Firebase.', 'success');
+                return true;
             };
 
             return (
@@ -2378,6 +2383,15 @@
     </script>
 
     <script type="text/babel">
+        window.__REKAPTOLL_DIAGNOSTICS__ = Object.freeze({
+            app: 'rekap-etoll-ai',
+            schema: 'transactionsByMonth',
+            database: 'rekaptoll-production',
+            duplicateInvoiceScope: 'current-calendar-month',
+            transactionalWrites: 'telegram-only',
+            version: 'audit-fix-2026-11'
+        });
+
         function App() {
             // Master kartu resmi dimuat dari Firebase, bukan daftar/cache bawaan browser.
             const [cards, setCards] = React.useState([]);
@@ -2666,6 +2680,10 @@
             };
 
             const pushToCloud = async (path, data) => {
+                const safePath = String(path || '').replace(/^\\/+|\\/+/g, '');
+                if (!safePath || safePath.split('/').some(part => !part || /[.#$\\[\\]]/.test(part))) {
+                    throw new Error('Path Firebase tidak valid; penulisan dibatalkan.');
+                }
                 if (!firebaseProjectId) {
                     setSyncStatus({ state: 'idle', msg: 'Cloud Sync Non-Aktif — perubahan hanya lokal' });
                     return false;
@@ -2674,7 +2692,7 @@
                     const targetPid = firebaseProjectId.trim();
                     // Jangan membatalkan PUT dengan AbortController: pada beberapa koneksi
                     // browser lokal, request dibatalkan sebelum Firebase mengembalikan respons.
-                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${path}.json`;
+                    const url = `https://${targetPid}-default-rtdb.asia-southeast1.firebasedatabase.app/${safePath}.json`;
                     console.info('[Firebase] Menyimpan', path);
                     const response = await fetch(url, {
                         method: 'PUT',
@@ -2687,8 +2705,10 @@
                         try { detail = await response.text(); } catch (_) {}
                         throw new Error(`Firebase HTTP ${response.status}${detail ? ': ' + detail.slice(0,180) : ''}`);
                     }
+                    const confirmed = await response.json();
+                    if (confirmed === undefined) throw new Error('Firebase tidak memberikan konfirmasi respons.');
                     setSyncStatus({ state: 'success', msg: 'Tersimpan di Firebase' });
-                    console.info('[Firebase] Berhasil menyimpan', path);
+                    console.info('[Firebase] Berhasil menyimpan', safePath);
                     return true;
                 } catch (e) {
                     console.error('Cloud push failed for', path, e);
@@ -2915,10 +2935,21 @@
                 setTimeout(() => setToast(null), 4000);
             };
 
-            const handleUpdateSpjProfile = (newProfile) => {
+            const handleUpdateSpjProfile = async (newProfile) => {
+                if (!newProfile || typeof newProfile !== 'object' || Array.isArray(newProfile)) {
+                    showToastNotification('Profil SPJ tidak valid dan tidak disimpan.', 'error');
+                    return false;
+                }
+                const previousProfile = spjProfile;
                 setSpjProfile(newProfile);
-                pushToCloud('spjProfile', newProfile);
-                showToastNotification('Profil SPJ & Pejabat berhasil diperbarui & disimpan ke Cloud!');
+                const saved = await pushToCloud('spjProfile', newProfile);
+                if (saved !== true) {
+                    setSpjProfile(previousProfile);
+                    showToastNotification('Profil SPJ belum terkonfirmasi Firebase; perubahan lokal dibatalkan.', 'error');
+                    return false;
+                }
+                showToastNotification('Profil SPJ berhasil disimpan dan dikonfirmasi Firebase.', 'success');
+                return true;
             };
 
             const checkDuplicateInvoice = (invoiceNum, excludeId = null) => {
@@ -2927,7 +2958,12 @@
                 // Pemeriksaan UI dibatasi ke bulan kalender berjalan; worker tetap menjadi validasi utama.
                 const now = new Date();
                 const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                return transactions.some(t => t.id !== excludeId && String(t.date || '').slice(0, 7) === monthKey && t.invoiceNumber && String(t.invoiceNumber).trim().toUpperCase() === clean);
+                return transactions.some(t => {
+                    const date = String(t.date || '').slice(0, 10);
+                    const invoice = String(t.invoiceNumber || '').trim().toUpperCase();
+                    return String(t.id) !== String(excludeId) && date.slice(0, 7) === monthKey &&
+                        /^\\d{4}-\\d{2}-\\d{2}$/.test(date) && invoice === clean;
+                });
             };
 
             const handleAddCard = (newCardData) => {
@@ -2954,8 +2990,17 @@
                 };
                 const updated = [...cards, newCard];
                 setCards(updated);
-                pushToCloud('cards', updated);
-                showToastNotification(`Kartu baru (${formattedNum}) berhasil ditambahkan.`);
+                pushToCloud('cards', updated).then(saved => {
+                    if (saved !== true) {
+                        setCards(previous => previous.filter(card => card.id !== newCard.id));
+                        showToastNotification('Kartu belum tersimpan di Firebase; perubahan lokal dibatalkan.', 'error');
+                    } else {
+                        showToastNotification(`Kartu baru (${formattedNum}) berhasil disimpan di Firebase.`, 'success');
+                    }
+                }).catch(error => {
+                    setCards(previous => previous.filter(card => card.id !== newCard.id));
+                    showToastNotification(`Gagal menyimpan kartu: ${error.message || error}`, 'error');
+                });
                 return newCard;
             };
 
