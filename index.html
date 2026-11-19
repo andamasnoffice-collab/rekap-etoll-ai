@@ -1783,13 +1783,13 @@
                                     {/* TANDA TANGAN REKAP */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '36px', paddingLeft: '55px', paddingRight: '40px', fontSize: '9.5pt' }}>
                                         <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                            <p style={{ margin: '0 0 2px 0' }}>Kasubdit RT, TU dan Logistik</p>
+                                            <p style={{ margin: '0 0 2px 0' }}>{spjProfile.kasubditTitle || 'Kasubdit RT, TU dan Logistik'}</p>
                                             <div style={{ height: '75px' }}></div>
                                             <p style={{ fontWeight: 'bold', margin: '0 0 2px 0' }}>{spjProfile.kasubditName || 'Widyo Agung Nugroho. S.Kom.'}</p>
                                             <p style={{ fontWeight: 'bold', margin: 0 }}>NIP {spjProfile.kasubditNip || '198110212008121001'}</p>
                                         </div>
                                         <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                            <p style={{ margin: '0 0 2px 0' }}>Penanggungjawab Pengemudi</p>
+                                            <p style={{ margin: '0 0 2px 0' }}>{spjProfile.applicantTitle || 'Penanggungjawab Pengemudi'}</p>
                                             <div style={{ height: '75px' }}></div>
                                             <p style={{ fontWeight: 'bold', margin: '0 0 2px 0' }}>{spjProfile.applicantName || 'Anda Mas Nurhidayanto'}</p>
                                             <p style={{ fontWeight: 'bold', margin: 0 }}>NIP {spjProfile.applicantNip || '1990090620160801'}</p>
@@ -1863,14 +1863,14 @@
                                                             <div className="space-y-0.5">
                                                                 <p className="invisible select-none" style={{ margin: 0 }}>&nbsp;</p>
                                                                 <p style={{ margin: 0 }}>Mengetahui,</p>
-                                                                <p style={{ margin: 0 }}>Kasubdit RT, TU dan Logistik</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.kasubditTitle || 'Kasubdit RT, TU dan Logistik'}</p>
                                                             </div>
                                                         </td>
                                                         <td style={{ width: '46%', border: 'none', padding: '0 0 0 42px' }}>
                                                             <div className="space-y-0.5">
                                                                 <p style={{ margin: 0 }}>{spjProfile.city || 'Surakarta'},</p>
                                                                 <p style={{ margin: 0 }}>Yang membayarkan</p>
-                                                                <p style={{ margin: 0 }}>Penanggungjawab Pengemudi</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.applicantTitle || 'Penanggungjawab Pengemudi'}</p>
                                                             </div>
                                                         </td>
                                                     </tr>
@@ -1901,7 +1901,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p style={{ margin: 0 }}>Setuju dibebankan pada MA berkenaan.</p>
                                                                 <p style={{ margin: 0 }}>An. Kuasa Pengguna Anggaran</p>
-                                                                <p style={{ margin: 0 }}>Pejabat Pembuat Komitmen</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -1909,7 +1909,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p style={{ margin: 0 }}>Lunas dibayar Tanggal :</p>
                                                                 <p className="invisible select-none" style={{ margin: 0 }}>&nbsp;</p>
-                                                                <p style={{ margin: 0 }}>Bendahara Pengeluaran Pembantu</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -1966,7 +1966,7 @@
                                             </div>
 
                                             <p className="text-[8.5pt] mb-2 leading-relaxed text-justify">
-                                                Saya yang bertanda tangan di bawah ini selaku Pejabat Pembuat Komitmen memerintahkan Bendahara Pengeluaran Pembantu agar melakukan pembayaran sejumlah :
+                                                Saya yang bertanda tangan di bawah ini selaku {spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen'} memerintahkan {spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu'} agar melakukan pembayaran sejumlah :
                                             </p>
 
                                             <div className="border-t-[1.5px] border-b-[1.5px] border-black py-1.5 my-2 text-center">
@@ -2041,7 +2041,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p className="invisible select-none" style={{ margin: 0 }}>&nbsp;</p>
                                                                 <p style={{ margin: 0 }}>Setuju/lunas dibayar</p>
-                                                                <p style={{ margin: 0 }}>Bendahara Pengeluaran Pembantu</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -2056,7 +2056,7 @@
                                                             <div className="space-y-0.5">
                                                                 <p style={{ margin: 0 }}>{spjProfile.city || 'Surakarta'},</p>
                                                                 <p style={{ margin: 0 }}>a.n. Kuasa Pengguna Anggaran</p>
-                                                                <p style={{ margin: 0 }}>Pejabat Pembuat Komitmen</p>
+                                                                <p style={{ margin: 0 }}>{spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen'}</p>
                                                                 <p style={{ margin: 0 }}>Kantor Pusat UNS</p>
                                                             </div>
                                                         </td>
@@ -4154,8 +4154,18 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">1</span>
-                                                    <p className="font-bold text-amber-300">Penanggungjawab Pengemudi</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.applicantTitle || 'Penanggungjawab Pengemudi'}</p>
                                                 </div>
+                                                 <div>
+                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
+                                                     <input
+                                                         type="text"
+                                                         value={spjProfile.applicantTitle || 'Penanggungjawab Pengemudi'}
+                                                         onChange={e => setSpjProfile({...spjProfile, applicantTitle: e.target.value})}
+                                                         className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                         placeholder="Penanggungjawab Pengemudi"
+                                                     />
+                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
                                                     <input 
@@ -4182,8 +4192,18 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">2</span>
-                                                    <p className="font-bold text-amber-300">Kasubdit RT, TU dan Logistik</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.kasubditTitle || 'Kasubdit RT, TU dan Logistik'}</p>
                                                 </div>
+                                                 <div>
+                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
+                                                     <input
+                                                         type="text"
+                                                         value={spjProfile.kasubditTitle || 'Kasubdit RT, TU dan Logistik'}
+                                                         onChange={e => setSpjProfile({...spjProfile, kasubditTitle: e.target.value})}
+                                                         className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                         placeholder="Kasubdit RT, TU dan Logistik"
+                                                     />
+                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
                                                     <input 
@@ -4210,8 +4230,18 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">3</span>
-                                                    <p className="font-bold text-amber-300">Pejabat Pembuat Komitmen (PPK)</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen (PPK)'}</p>
                                                 </div>
+                                                 <div>
+                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
+                                                     <input
+                                                         type="text"
+                                                         value={spjProfile.ppkTitle || 'Pejabat Pembuat Komitmen (PPK)'}
+                                                         onChange={e => setSpjProfile({...spjProfile, ppkTitle: e.target.value})}
+                                                         className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                         placeholder="Pejabat Pembuat Komitmen (PPK)"
+                                                     />
+                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
                                                     <input 
@@ -4238,8 +4268,18 @@
                                             <div className="space-y-2 p-3 bg-slate-950/70 rounded-xl border border-slate-800 hover:border-amber-500/40 transition">
                                                 <div className="flex items-center gap-1.5 pb-1 border-b border-slate-800/80">
                                                     <span className="w-5 h-5 rounded-md bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold text-[10px]">4</span>
-                                                    <p className="font-bold text-amber-300">Bendahara Pengeluaran Pembantu (BPP)</p>
+                                                    <p className="font-bold text-amber-300">{spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu (BPP)'}</p>
                                                 </div>
+                                                 <div>
+                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Jabatan</label>
+                                                     <input
+                                                         type="text"
+                                                         value={spjProfile.bppTitle || 'Bendahara Pengeluaran Pembantu (BPP)'}
+                                                         onChange={e => setSpjProfile({...spjProfile, bppTitle: e.target.value})}
+                                                         className="w-full p-2 bg-slate-900 border border-slate-700 rounded-lg text-white font-medium focus:ring-1 focus:ring-amber-400"
+                                                         placeholder="Bendahara Pengeluaran Pembantu (BPP)"
+                                                     />
+                                                 </div>
                                                 <div>
                                                     <label className="text-[10px] text-slate-400 block mb-0.5">Nama Lengkap</label>
                                                     <input 
