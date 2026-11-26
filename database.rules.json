@@ -1,0 +1,67 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "transactionsByMonth": {
+      ".read": "auth != null",
+      "$month": {
+        ".write": "auth != null && (auth.token.admin === true || auth.token.bot === true)",
+        ".validate": "$month.matches(/^\\d{4}-\\d{2}$/)"
+      }
+    },
+
+    "cards": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.admin === true || auth.token.bot === true)"
+    },
+
+    "monthlyDeposits": {
+      ".read": "auth != null",
+      ".write": "auth != null && (auth.token.admin === true || auth.token.bot === true)"
+    },
+
+    "monthlyDepositHistory": {
+      ".read": "auth != null",
+      "$month": {
+        ".write": "auth != null && (auth.token.admin === true || auth.token.bot === true)",
+        ".validate": "$month.matches(/^\\d{4}-\\d{2}$/)"
+      }
+    },
+
+    "spjProfile": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.admin === true"
+    },
+
+    "masterDrivers": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.admin === true"
+    },
+
+    "masterVehicles": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.admin === true"
+    },
+
+    "pending_sessions": {
+      ".read": "auth != null && auth.token.bot === true",
+      ".write": "auth != null && auth.token.bot === true"
+    },
+
+    "invoiceIndex": {
+      ".read": "auth != null && (auth.token.bot === true || auth.token.admin === true)",
+      ".write": "auth != null && (auth.token.bot === true || auth.token.admin === true)"
+    },
+
+    "transactions": {
+      ".read": "auth != null && (auth.token.bot === true || auth.token.admin === true)",
+      ".write": "auth != null && (auth.token.bot === true || auth.token.admin === true)"
+    },
+
+    "adminSettings": {
+      ".read": "auth != null && auth.token.admin === true",
+      ".write": "auth != null && auth.token.admin === true"
+    }
+  }
+}
